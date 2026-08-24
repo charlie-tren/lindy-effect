@@ -61,6 +61,13 @@ def main():
                 ctx = b.new_context(viewport={"width": w, "height": h},
                                     color_scheme=theme, has_touch=w < 768,
                                     is_mobile=w < 768)
+                # The page ignores prefers-color-scheme entirely - it is dark unless a
+                # stored choice says otherwise - so color_scheme above does NOT select
+                # the theme, and for a while all three contexts silently rendered dark
+                # while claiming to cover both. Seed the stored choice instead.
+                if theme == "light":
+                    ctx.add_init_script(
+                        "try{localStorage.setItem('lc-theme','light')}catch(e){}")
                 pg = ctx.new_page()
                 errs = []
                 pg.on("console", lambda m: m.type == "error" and errs.append(m.text))
@@ -336,19 +343,21 @@ def main():
                 check(pg.locator("header a.back .arw").count() == 1,
                       f"{tag}: the Other projects link has no arrow")
 
-                theme = pg.evaluate("document.documentElement.getAttribute('data-theme')")
-                check(theme == "light",
-                      f"{tag}: default theme is '{theme}', must be light regardless of "
-                      "the browser preference")
+                # Dark on a first visit, and a stored choice is honoured. The light
+                # context above seeds that choice, so each context asserts its own theme
+                # rather than one hardcoded expectation.
+                other = "light" if theme == "dark" else "dark"
+                got = pg.evaluate("document.documentElement.getAttribute('data-theme')")
+                check(got == theme, f"{tag}: theme is '{got}', expected '{theme}'")
                 check(pg.locator("#tog").count() == 1, f"{tag}: no theme toggle")
                 pg.click("#tog")
                 pg.wait_for_timeout(180)
                 check(pg.evaluate("document.documentElement.getAttribute('data-theme')")
-                      == "dark", f"{tag}: the toggle did not switch to dark")
+                      == other, f"{tag}: the toggle did not switch to {other}")
                 pg.click("#tog")
                 pg.wait_for_timeout(180)
                 check(pg.evaluate("document.documentElement.getAttribute('data-theme')")
-                      == "light", f"{tag}: the toggle did not switch back to light")
+                      == theme, f"{tag}: the toggle did not switch back to {theme}")
 
                 # one dot size only - two radii read as a distinction in the data
                 radii = pg.evaluate("""() => [...new Set([...document.querySelectorAll(
