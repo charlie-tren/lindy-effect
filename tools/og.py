@@ -31,7 +31,7 @@ def main():
     rho_all = next(s["rho"] for s in derived["states"] if s["floor"] == 0)
 
     card = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-:root{{--ground:#1B1611;--ink:#EDE3CE;--dim:#A08F72;--faint:#6E6049;--rule:#3B3125;
+:root{{--ground:#100D0A;--ink:#EDE3CE;--dim:#A08F72;--faint:#6E6049;--rule:#3B3125;
 --gilt:#C9A961;--ox:#B4453A;
 --body:Georgia,"Palatino Linotype",serif;--disp:"Arial Narrow",Helvetica,sans-serif;
 --mono:"Courier New",monospace}}
