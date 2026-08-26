@@ -50,7 +50,18 @@ a{color:var(--gilt);text-underline-offset:3px}
   display:inline-flex;align-items:center;gap:.45rem;transition:color .2s,border-color .2s}
 .tog:hover{color:var(--ink);border-color:var(--gilt)}
 .tog .dot{width:7px;height:7px;border-radius:50%;background:var(--gilt)}
-.mastr{display:inline-flex;align-items:center;gap:1.15rem}
+.mastr{display:inline-flex;align-items:center;gap:1.15rem;justify-content:flex-end}
+/* Theme toggle first, back-link last, which is the order Beyond Small Talk,
+   Split the Room, Spectrum, Ghostwriters and Equity Research all use. Left in
+   source order the link sat 107px short of the right edge on a phone, so it
+   read as right-ish rather than as the same control in the same place. Only
+   two children here, so one explicit order and one default is unambiguous. */
+.mastr .back{order:2}
+/* The masthead is space-between, which puts this group right while it shares a
+   line with the wordmark. On a phone it wraps to a line of its own and reverts
+   to the left, on the opposite side from the rest of the estate. A wrapped
+   element needs a new alignment, not the old one. */
+@media (max-width:640px){ .mast{flex-wrap:wrap} .mastr{width:100%} }
 .mast{display:flex;align-items:baseline;justify-content:space-between;gap:1.15rem;
       flex-wrap:wrap;border-bottom:1px solid var(--rule);padding-bottom:.8rem}
 .wm{font:400 clamp(26px,5vw,36px)/1 var(--body);font-variant:small-caps;
