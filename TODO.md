@@ -33,3 +33,21 @@ the books version has shipped.
       Sequencing thought: rather than four separate pages, the interesting version is ONE
       explorer with a medium toggle on a shared pageviews axis. That reuses the whole books
       build and makes the cross-medium comparison the actual product.
+
+## The smoke suite cannot go green on a laptop (found 26/08/2026)
+
+- [ ] **Let `tests/smoke.py` ignore the analytics beacons' CORS errors when it is not
+      running against the live origin.** Since the Cloudflare Web Analytics beacon landed
+      (`ed96b24`), every local run reports `FAIL (3)` - one per theme/width - because
+      `cloudflareinsights.com` refuses a preflight from `http://127.0.0.1:<random port>`
+      and the console-error check catches it. The failure is real in the sense that the
+      request really fails, and entirely uninformative: it fails identically on a clean
+      checkout and on broken code.
+      **Why it matters more than it looks.** A suite that always prints FAIL is a suite
+      whose output nobody reads, so the next genuine regression arrives inside a number
+      that was already red. The chart-pan fix on 26/08 needed a baseline run against an
+      untouched tree purely to work out which three of the failures were furniture.
+      The fix is to filter console errors whose URL is a known third-party beacon host
+      when `base` is localhost, and to keep asserting them when it runs against the
+      deployed page. Do NOT simply drop the console-error check: it is the only thing
+      that would catch a real script error on the page.
