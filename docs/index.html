@@ -135,8 +135,8 @@ footer{margin-top:3rem;padding-top:1.15rem;border-top:1px solid var(--rule);
        font-size:.88rem;color:var(--dim)}
 
 .g{stroke:var(--rule);stroke-width:1}
-.ax{font:400 10px var(--mono);fill:var(--dim)}
-.axl{font:700 9px var(--disp);letter-spacing:.16em;fill:var(--dim)}
+.ax{font:400 11px var(--mono);fill:var(--dim)}
+.axl{font:700 10px var(--disp);letter-spacing:.16em;fill:var(--dim)}
 .hdl{font:400 19px var(--body);fill:var(--ink);letter-spacing:-.01em}
 .sp{stroke-width:0}
 .cv{fill:none;stroke:var(--gilt);stroke-width:2.2}
@@ -377,6 +377,73 @@ function pinchZoom(svg, G, zoom, cancelDrag) {
   svg.addEventListener("pointerleave", drop);
 }
 
+/* The hero curve is generated server-side at a fixed 960-unit width, so unlike the
+   three charts below it cannot be re-laid-out here: its label positions were solved in
+   that coordinate space by a separation sweep in build.py. What it CAN stop doing is
+   pretending six labels fit on a phone.
+
+   `k` is user units per rendered pixel. Setting a font to `size * k` units renders it
+   at exactly `size` pixels whatever the scale, so the labels come back to a real size
+   instead of 4px. Below about 600px rendered, the middle callouts come off entirely:
+   six labels do not fit on a 342px curve at any legible size, and a label that does
+   not fit is deleted rather than shrunk. Both ENDS always stay, because placing the
+   oldest and the newest work is the whole claim the picture makes. Every dot stays,
+   and every one of them is already on the tooltip.
+
+   Nothing happens above 768px rendered, so the desktop drawing is untouched. */
+function heroFit() {
+  const svg = document.querySelector("#v-curve figure svg");
+  if (!svg) return;
+  const vb = (svg.viewBox && svg.viewBox.baseVal.width) || 960;
+  const shown = svg.getBoundingClientRect().width || vb;
+  const k = vb / shown;
+  const labels = [].slice.call(svg.querySelectorAll(".mkl"));
+  const drop = k > 1.6 && labels.length > 2;
+  const scale = k > 1.25;
+  labels.forEach(function (t, i) {
+    const keep = !drop || i === 0 || i === labels.length - 1;
+    t.style.display = keep ? "" : "none";
+    t.style.fontSize = (keep && scale) ? (10.5 * k).toFixed(1) + "px" : "";
+  });
+  [[".axl", 10], [".ax", 11], [".note", 11], [".fitl", 11]].forEach(function (pair) {
+    [].slice.call(svg.querySelectorAll(pair[0])).forEach(function (t) {
+      t.style.fontSize = scale ? (pair[1] * k).toFixed(1) + "px" : "";
+    });
+  });
+
+  /* build.py placed each label clear of the curve at its ORIGINAL size, so growing
+     one drops its baseline box onto the curve: at 375 The Odyssey landed on it. Lift
+     whatever is now touching. Sampled across the label's own x range rather than at
+     its midpoint, because in the steep shoulder the curve falls further under the far
+     end of a label than under its centre.
+
+     Every label is reset to the y build.py gave it first, so this is idempotent and a
+     resize does not accumulate lifts. */
+  const cv = svg.querySelector("path.cv");
+  if (!cv || !cv.getTotalLength) return;
+  const len = cv.getTotalLength();
+  const yAt = function (x) {
+    let lo = 0, hi = len;
+    for (let i = 0; i < 24; i++) {
+      const m = (lo + hi) / 2;
+      if (cv.getPointAtLength(m).x < x) { lo = m; } else { hi = m; }
+    }
+    return cv.getPointAtLength(lo).y;
+  };
+  labels.forEach(function (t) {
+    if (t.dataset.y0 === undefined) t.dataset.y0 = t.getAttribute("y");
+    t.setAttribute("y", t.dataset.y0);
+    if (t.style.display === "none") return;
+    const bb = t.getBBox();
+    let top = Infinity;
+    for (let i = 0; i <= 20; i++) top = Math.min(top, yAt(bb.x + bb.width * i / 20));
+    const clear = top - (bb.y + bb.height);
+    if (clear < 4) {
+      t.setAttribute("y", (parseFloat(t.dataset.y0) - (4 - clear)).toFixed(1));
+    }
+  });
+}
+
 function heroLabels() {
   var svg = document.querySelector("#v-curve svg");
   if (!svg) return;
@@ -505,15 +572,60 @@ if (svgHero && document.getElementById("tip6")) {
   svgHero.addEventListener("pointerleave", function () { tipHero.hide(); });
 }
 
+/* Size a chart's viewBox off its RENDERED width, so one user unit is one CSS pixel.
+
+   A fixed `viewBox="0 0 960 ..."` scaled into a 390px phone shrinks every label with
+   it: these four charts declared 9-10px and rendered at 4, measured off the live page
+   with getBoundingClientRect. Nothing in the CSS or the computed font-size says so -
+   `getComputedStyle(text).fontSize` reports the user-unit size and looks perfectly
+   healthy - which is why it sat there unnoticed. Pendulum and Inequality render the
+   same declared sizes at 15px because they do this.
+
+   Margins come off the render too. 180px of gutter is a fifth of a 960 canvas and
+   more than half of a 342 one, so a set that is right on a desktop leaves a phone
+   with no plot at all. Each box carries both, and the narrow set is chosen by
+   measurement rather than by a media query, because the container is not the window:
+   the same chart is narrower inside a padded card than the viewport suggests. */
+/* A log axis puts 1, 2 and 5 in every decade, so at a phone's width the top of one
+   decade lands on the bottom of the next: "1,000" printed into "2,000". Keep every
+   grid LINE and drop only the label that will not clear its neighbour.
+
+   A separation guard rather than a per-width tick list, because both of these axes
+   ZOOM. Any fixed choice of which ticks to label is wrong at some magnification, and
+   the guard is right at all of them. */
+function spacer(min) {
+  let last = -Infinity;
+  return function (x) {
+    if (x - last < min) return false;
+    last = x;
+    return true;
+  };
+}
+
+function fitBox(svg, box) {
+  const w = Math.round(svg.getBoundingClientRect().width) || box.W;
+  if (w > 0) box.W = w;
+  Object.assign(box, w < 560 ? box.narrow : box.wide);
+  svg.setAttribute("viewBox", "0 0 " + box.W + " " + box.H);
+  return box;
+}
+
 /* --------------- shelf: how many books from each century are still read above a bar */
 const svgShelf = document.getElementById("shelf");
 const tipShelf = tipper("tip3", svgShelf);
-const SH = {W: 960, H: 280};
+const SH = {W: 960, H: 280,
+            wide:   {H: 286, L: 58, R: 14, T: 18, B: 62, step: 2},
+            narrow: {H: 320, L: 56, R: 10, T: 14, B: 68, step: 4}};
 let thresh = "200";
 function shelf(st) {
   clear(svgShelf);
   tipShelf.reset();
-  const W = SH.W, H = SH.H, L = 58, R = 14, T = 18, B = 56;
+  fitBox(svgShelf, SH);
+  const W = SH.W, H = SH.H, L = SH.L, R = SH.R, T = SH.T, B = SH.B;
+  // Twenty-four centuries into 300px is a 12px bar, so every second label still
+  // overprints its neighbour. Thinning is the only answer that keeps them legible;
+  // every bar is on the tooltip either way.
+  const STEP = SH.step;
   // newest on the LEFT, oldest on the RIGHT, matching the curve above
   const bars = st.shelf.bars.slice().reverse();
   if (!bars.length) return;
@@ -541,7 +653,7 @@ function shelf(st) {
     svgShelf.appendChild(el("rect", {x: (x + bw * 0.14).toFixed(1), y: yTop.toFixed(1),
       width: (bw * 0.72).toFixed(1), height: Math.max(0.5, H - B - yTop).toFixed(1),
       fill: "var(--c" + band(b.y) + ")", "data-year": b.y}));
-    if (i % 2 === 0 || i === bars.length - 1) {
+    if ((bars.length - 1 - i) % STEP === 0) {
       const g = el("g", {transform: "rotate(-44 " + (x + bw / 2).toFixed(1) + " "
         + (H - B + 15) + ")"});
       g.appendChild(txt(cLab(b.c), {class: "ax", x: (x + bw / 2).toFixed(1),
@@ -577,7 +689,12 @@ svgShelf.addEventListener("pointerleave", function () { tipShelf.hide(); });
 
 
 /* --------------------------------------------- scatter: zoom, pan and hover */
-const SC = {W: 960, H: 470, L: 58, R: 122, T: 26, B: 52};
+const SC = {W: 960, H: 470, L: 58, R: 122, T: 26, B: 52,
+            wide:   {H: 470, L: 58, R: 122, T: 26, B: 52},
+            /* R drops from 122 to 12: that gutter exists to keep the fit label off
+               the cloud, and on a phone it was costing more than a third of the
+               plot. The label is right-aligned inside the plot instead. */
+            narrow: {H: 430, L: 54, R: 12, T: 22, B: 46}};
 /* The plot holds only the most-read works, so it is truncated at the bottom. Read that
    floor OFF THE DATA rather than rounding it to 1,000, and do not round it back.
 
@@ -699,10 +816,11 @@ function furniture() {
   drop.forEach(function (n) { svgScatter.removeChild(n); });
   gridG = el("g", {id: "grid"});
   svgScatter.insertBefore(gridG, keep || null);
+  const okX1 = spacer(42);
   ticks(view.x0, view.x1).forEach(function (v) {
     const X = spx(Math.log10(v));
     gridG.appendChild(el("line", {class: "g", x1: X, y1: SC.T, x2: X, y2: SC.H - SC.B}));
-    gridG.appendChild(txt(fmt(v), {class: "ax", x: X, y: SC.H - SC.B + 18,
+    if (okX1(X)) gridG.appendChild(txt(fmt(v), {class: "ax", x: X, y: SC.H - SC.B + 18,
       "text-anchor": "middle"}));
   });
   ticks(view.y0, view.y1).forEach(function (v) {
@@ -727,13 +845,15 @@ function furniture() {
 function scatter() {
   clear(svgScatter);
   tipScatter.reset();
+  fitBox(svgScatter, SC);
   gridG = el("g", {id: "grid"});
   svgScatter.appendChild(gridG);
+  const okX2 = spacer(42);
   ticks(view.x0, view.x1).forEach(function (v) {
     const X = spx(Math.log10(v));
     gridG.appendChild(el("line", {class: "g", x1: X, y1: SC.T, x2: X,
       y2: SC.H - SC.B}));
-    gridG.appendChild(txt(fmt(v), {class: "ax", x: X, y: SC.H - SC.B + 18,
+    if (okX2(X)) gridG.appendChild(txt(fmt(v), {class: "ax", x: X, y: SC.H - SC.B + 18,
       "text-anchor": "middle"}));
   });
   ticks(view.y0, view.y1).forEach(function (v) {
@@ -867,18 +987,22 @@ function state() { return ST; }
 
 
 draw();
+heroFit();
 heroLabels();
 
 /* --------------------------------- the second opinion: Wikipedia pageviews */
 const svgWiki = document.getElementById("wiki");
 const tipWiki = svgWiki ? tipper("tip5", svgWiki) : null;
-const WK = {W: 960, H: 420, L: 66, R: 26, T: 30, B: 52};
+const WK = {W: 960, H: 420, L: 66, R: 26, T: 30, B: 52,
+            wide:   {H: 420, L: 66, R: 26, T: 30, B: 52},
+            narrow: {H: 380, L: 56, R: 12, T: 24, B: 46}};
 let wHome = null, wView = null;
 function wiki() {
   const w = D.wiki;
   if (!w || !svgWiki) return;
   clear(svgWiki);
   tipWiki.reset();
+  fitBox(svgWiki, WK);
   const pts = w.points;
   if (!wHome) {
     wHome = {x0: Math.log10(60), x1: Math.log10(3200),
@@ -889,13 +1013,14 @@ function wiki() {
   const x0 = wView.x0, x1 = wView.x1, y0 = wView.y0, y1 = wView.y1;
   const px = v => WK.L + (v - x0) / (x1 - x0) * (WK.W - WK.L - WK.R);
   const py = v => WK.H - WK.B - (v - y0) / (y1 - y0) * (WK.H - WK.T - WK.B);
+  const okWX = spacer(42);
   ticks(x0, x1).forEach(function (v) {
     const l = Math.log10(v);
     if (l < x0 || l > x1) return;
     svgWiki.appendChild(el("line", {class: "g", x1: px(l), y1: WK.T, x2: px(l),
       y2: WK.H - WK.B}));
-    svgWiki.appendChild(txt(fmt(v), {class: "ax", x: px(l), y: WK.H - WK.B + 18,
-      "text-anchor": "middle"}));
+    if (okWX(px(l))) svgWiki.appendChild(txt(fmt(v), {class: "ax", x: px(l),
+      y: WK.H - WK.B + 18, "text-anchor": "middle"}));
   });
   ticks(y0, y1).forEach(function (v) {
     const l = Math.log10(v);
@@ -1003,6 +1128,20 @@ function draw() {
   scatter();
 }
 draw();
+
+/* Now that the geometry comes from the container, a resize has to redraw it or a
+   rotated phone keeps the portrait margins. Debounced: a rotation fires a burst and
+   each scatter redraw places ten thousand points. Width only - a mobile browser
+   changes the reported HEIGHT every time its address bar hides, and redrawing on
+   that would rebuild the cloud on every scroll. */
+let lastW = window.innerWidth;
+let resizeT = null;
+window.addEventListener("resize", function () {
+  if (window.innerWidth === lastW) return;
+  lastW = window.innerWidth;
+  clearTimeout(resizeT);
+  resizeT = setTimeout(function () { draw(); wiki(); heroFit(); }, 150);
+});
 
 /* the dropdown filters above the dot plot */
 (function () {

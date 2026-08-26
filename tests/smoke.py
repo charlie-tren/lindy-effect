@@ -191,7 +191,14 @@ def main():
                       (cv.getPointAtLength(m).x < x) ? lo = m : hi = m;}
                     return cv.getPointAtLength(lo).y;};
                   const out = [], boxes = [];
-                  for (const t of svg.querySelectorAll('.mkl')) {
+                  // VISIBLE labels only. Below about 600px rendered, page.js takes the
+                  // middle callouts off and keeps the two ends, because six do not fit
+                  // on a 342px curve at any legible size. A hidden label has a zero
+                  // bbox, which reads to every check below as a label sitting at the
+                  // origin, on the curve, on top of its neighbours.
+                  const all = [...svg.querySelectorAll('.mkl')];
+                  const vis = all.filter(t => getComputedStyle(t).display !== 'none');
+                  for (const t of vis) {
                     const bb = t.getBBox(); boxes.push(bb);
                     let top = 1e9;
                     for (let i = 0; i <= 20; i++) top = Math.min(top, yAt(bb.x + bb.width * i / 20));
@@ -210,7 +217,14 @@ def main():
                                                       b.y - (a.y + a.height)));
                       near = Math.min(near, Math.hypot(dx, dy));
                     }
-                  return {out, ov, near, w: svg.viewBox.baseVal.width};
+                  return {out, ov, near, w: svg.viewBox.baseVal.width,
+                          shown: vis.length, total: all.length,
+                          ends: vis.length > 1 && vis[0] === all[0]
+                                && vis[vis.length - 1] === all[all.length - 1],
+                          px: svg.getBoundingClientRect().width,
+                          size: vis.length ? parseFloat(getComputedStyle(vis[0]).fontSize)
+                                             / (svg.viewBox.baseVal.width
+                                                / svg.getBoundingClientRect().width) : 0};
                 }""")
                 onc = [x["n"] for x in lab["out"] if x["clear"] < 1]
                 check(not onc, f"{tag}: hero labels drawn over the curve: {onc}")
@@ -229,6 +243,28 @@ def main():
                       f"{tag}: closest hero labels only {lab['near']:.0f}px apart")
                 offr = [x["n"] for x in lab["out"] if x["right"] > lab["w"] - 4]
                 check(not offr, f"{tag}: hero labels run off the right edge: {offr}")
+
+                # The whole point of the narrow treatment: what survives is the two
+                # ENDS, because placing the oldest and the newest work is the claim the
+                # picture makes. Dropping the first or the last would be a bug that
+                # every check above would pass.
+                if lab["px"] < 600:
+                    check(lab["shown"] == 2,
+                          f"{tag}: {lab['shown']} hero labels visible at "
+                          f"{lab['px']:.0f}px, expected the two ends")
+                    check(lab["ends"], f"{tag}: the surviving hero labels are not "
+                                       f"the oldest and the newest work")
+                else:
+                    check(lab["shown"] == lab["total"],
+                          f"{tag}: only {lab['shown']} of {lab['total']} hero labels "
+                          f"visible at {lab['px']:.0f}px, which is not narrow")
+
+                # And the failure this page actually shipped with: a label whose
+                # RENDERED size is nothing like its declared size, because the viewBox
+                # is scaled. font-size reports user units and looks healthy at 10.5
+                # while the reader gets 4.
+                check(lab["size"] >= 9.5,
+                      f"{tag}: hero labels render at {lab['size']:.1f}px")
 
                 check(pg.locator("#v-curve svg title").count() == 0,
                       f"{tag}: hero marks still carry native <title> tooltips")
