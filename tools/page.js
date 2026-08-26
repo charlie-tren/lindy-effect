@@ -144,6 +144,20 @@ function tipper(tipId, svg) {
     }
   };
 }
+/* Keep a pan/zoom view sitting on top of its data: it may never be dragged so far that
+   the data leaves the frame. Zoomed IN, the view has to stay inside the data extent;
+   zoomed OUT past that extent it has to contain it instead. That is one rule seen from
+   two sides, so both fall out of a single clamp on where the low edge may sit, and there
+   is no second copy to drift. Panning was clamped on one edge of one axis before this,
+   which is how a drag could carry a plot clean off its own cloud. */
+function clampTo(v, home) {
+  const w = v.x1 - v.x0, h = v.y1 - v.y0;
+  const xa = home.x0, xb = home.x1 - w, ya = home.y0, yb = home.y1 - h;
+  const x0 = Math.min(Math.max(v.x0, Math.min(xa, xb)), Math.max(xa, xb));
+  const y0 = Math.min(Math.max(v.y0, Math.min(ya, yb)), Math.max(ya, yb));
+  v.x0 = x0; v.x1 = x0 + w;
+  v.y0 = y0; v.y1 = y0 + h;
+}
 function userPos(svg, ev, W, H) {
   const r = svg.getBoundingClientRect();
   return {x: (ev.clientX - r.left) / r.width * W, y: (ev.clientY - r.top) / r.height * H};
@@ -271,11 +285,13 @@ svgShelf.addEventListener("pointerleave", function () { tipShelf.hide(); });
 
 /* --------------------------------------------- scatter: zoom, pan and hover */
 const SC = {W: 960, H: 470, L: 58, R: 122, T: 26, B: 52};
-/* The plot holds only the 10,000 most-read works, so there is nothing below about 766
-   a month. Panning under 1,000 just showed empty space, so the view is clamped there. */
-const YFLOOR = Math.log10(1000);
+/* The plot holds only the most-read works, so it is truncated at the bottom. Read that
+   floor OFF THE DATA rather than rounding it to 1,000: the cut moves every time the
+   corpus is refetched, and a hard 1,000 sat ABOVE it, so thousands of real books were
+   below the opening view and could never be panned to. */
+const READ_MIN = D.scatter.points.reduce((m, p) => Math.min(m, p.d), Infinity);
 const HOME = {x0: Math.log10(5), x1: Math.log10(3200),
-              y0: YFLOOR, y1: Math.log10(200000)};
+              y0: Math.log10(READ_MIN * 0.95), y1: Math.log10(200000)};
 let view = Object.assign({}, HOME);
 const svgScatter = document.getElementById("scatter");
 const tipScatter = tipper("tip", svgScatter);
@@ -300,30 +316,48 @@ function scatterSoon() {
   scQueued = true;
   requestAnimationFrame(function () { scQueued = false; scatter(); });
 }
-let ptsG = null;
+let ptsG = null, dotsG = null, defsG = null;
 function buildCloud() {
   /* The cloud is built ONCE and its circles are then repositioned on pan and zoom.
      Recreating 4,800 SVG nodes every frame is what made dragging feel sticky; setting
      two attributes on existing nodes is far cheaper. A group transform would be cheaper
      still, but log-log zoom needs a non-uniform scale, which turns the dots into
-     ellipses - so this is the fast option that stays correct. */
-  ptsG = el("g", {id: "cloud"});
+     ellipses - so this is the fast option that stays correct.
+     THREE LAYERS, and the order matters: the clip has to sit OUTSIDE the pan transform
+     or it slides away with the dots and stops being a window on the plot. So ptsG is
+     clipped and never moves, dotsG carries the drag translate, circles live in dotsG. */
+  defsG = el("defs");
+  const cp = el("clipPath", {id: "plotclip"});
+  cp.appendChild(el("rect", {x: SC.L, y: SC.T, width: SC.W - SC.L - SC.R,
+    height: SC.H - SC.T - SC.B}));
+  defsG.appendChild(cp);
+  ptsG = el("g", {id: "cloud", "clip-path": "url(#plotclip)"});
+  dotsG = el("g");
+  ptsG.appendChild(dotsG);
   D.scatter.points.forEach(function () {
-    ptsG.appendChild(el("circle", {class: "pt sp", cx: -99, cy: -99, r: 2.9,
+    dotsG.appendChild(el("circle", {class: "pt sp", cx: 0, cy: 0, r: 2.9,
       opacity: 0.5}));
   });
 }
 function placeCloud() {
-  const kids = ptsG.childNodes, pts = D.scatter.points;
+  const kids = dotsG.childNodes, pts = D.scatter.points;
   for (let i = 0; i < pts.length; i++) {
     const p = pts[i], c = kids[i];
-    const lx = Math.log10(p.a), ly = Math.log10(p.d);
-    if (lx < view.x0 || lx > view.x1 || ly < view.y0 || ly > view.y1 || !inEra(p)) {
-      if (c.getAttribute("cx") !== "-99") c.setAttribute("cx", -99);
+    /* A dot the filters exclude is HIDDEN, never parked off-canvas. Parking put
+       thousands of them on one shared x, and a pan translates the whole group, so the
+       parked column marched into frame as a straight vertical line of phantom books.
+       display:none cannot be dragged back into view; an off-canvas coordinate can. */
+    if (!inEra(p)) {
+      if (c.getAttribute("display") !== "none") c.setAttribute("display", "none");
       continue;
     }
-    c.setAttribute("cx", spx(lx).toFixed(1));
-    c.setAttribute("cy", spy(ly).toFixed(1));
+    if (c.getAttribute("display") === "none") c.removeAttribute("display");
+    /* Placed whether or not it is currently in view, and left to the clip to hide.
+       Placing only the visible ones meant a drag - which just translates the group -
+       could never bring a new dot in, so the cloud thinned out as you panned and
+       snapped back on release. */
+    c.setAttribute("cx", spx(Math.log10(p.a)).toFixed(1));
+    c.setAttribute("cy", spy(Math.log10(p.d)).toFixed(1));
   }
 }
 let era = "all", lang = "all", minRead = 0, subj = "all";
@@ -355,7 +389,8 @@ function furniture() {
   const keep = ptsG;
   const drop = [];
   for (let i = 0; i < svgScatter.childNodes.length; i++) {
-    if (svgScatter.childNodes[i] !== keep) drop.push(svgScatter.childNodes[i]);
+    const n = svgScatter.childNodes[i];
+    if (n !== keep && n !== defsG) drop.push(n);
   }
   drop.forEach(function (n) { svgScatter.removeChild(n); });
   gridG = el("g", {id: "grid"});
@@ -407,6 +442,7 @@ function scatter() {
 
   if (!ptsG) buildCloud();
   placeCloud();
+  svgScatter.appendChild(defsG);
   svgScatter.appendChild(ptsG);
 
   let shown = 0;
@@ -444,13 +480,7 @@ function scatter() {
     + (z > 1.05 ? DOT + "zoomed " + z.toFixed(1) + "x" : "");
 }
 
-function clampView() {
-  if (view.y0 < YFLOOR) {
-    const h = view.y1 - view.y0;
-    view.y0 = YFLOOR;
-    view.y1 = YFLOOR + h;
-  }
-}
+function clampView() { clampTo(view, HOME); }
 // Zoom about a point, shared by the wheel and by pinch on touch. Extracted rather
 // than duplicated: the clamp rules here are the ones that keep the view inside the
 // data, and a second copy would drift away from them.
@@ -482,7 +512,7 @@ svgScatter.addEventListener("pointerdown", function (ev) {
 svgScatter.addEventListener("pointerup", function () {
   dragging = null;
   svgScatter.classList.remove("drag");
-  if (ptsG) ptsG.setAttribute("transform", "");
+  if (dotsG) dotsG.setAttribute("transform", "");
   if (gridG) gridG.setAttribute("transform", "");
   scatter();
 });
@@ -496,17 +526,19 @@ svgScatter.addEventListener("pointermove", function (ev) {
     view = {x0: dragging.v.x0 - dx, x1: dragging.v.x1 - dx,
             y0: dragging.v.y0 + dy, y1: dragging.v.y1 + dy};
     clampView();
-    /* Derive the shift from the CLAMPED view rather than the raw pointer delta.
-       Clamping the view alone still let the cloud slide past the floor, because the
-       translate was computed from where the mouse went, not where the chart allowed. */
+    /* Derive the shift from the CLAMPED view rather than the raw pointer delta, on both
+       axes now that both are clamped. Clamping the view alone still let the cloud slide
+       past the edge, because the translate was computed from where the mouse went, not
+       where the chart allowed. */
+    const appliedX = (dragging.v.x0 - view.x0) / (dragging.v.x1 - dragging.v.x0)
+                     * (SC.W - SC.L - SC.R);
     const appliedY = (dragging.v.y0 - view.y0) / (dragging.v.y1 - dragging.v.y0)
                      * (SC.H - SC.T - SC.B);
     // A pan is a pure translation, so shifting the group is exact AND costs one
     // attribute write instead of repositioning every circle. Axes redraw on the frame;
     // the cloud snaps back to real coordinates when the drag ends.
-    if (ptsG) ptsG.setAttribute("transform",
-      "translate(" + (u.x - dragging.u.x).toFixed(1) + ","
-      + (-appliedY).toFixed(1) + ")");
+    if (dotsG) dotsG.setAttribute("transform",
+      "translate(" + appliedX.toFixed(1) + "," + (-appliedY).toFixed(1) + ")");
     furnitureSoon();
     tipScatter.hide();
     return;
@@ -517,7 +549,7 @@ svgScatter.addEventListener("pointerleave", function () { tipScatter.hide(); });
 pinchZoom(svgScatter, SC, zoomScatter, function () {
   dragging = null;
   svgScatter.classList.remove("drag");
-  if (ptsG) ptsG.setAttribute("transform", "");
+  if (dotsG) dotsG.setAttribute("transform", "");
   if (gridG) gridG.setAttribute("transform", "");
 });
 svgScatter.addEventListener("dblclick", function () {
@@ -602,6 +634,10 @@ function wiki() {
 }
 if (svgWiki) {
   let wDrag = null;
+  /* This plot may zoom out to three times the home span for air round the cloud, so a
+     clamp to the home extent alone would fight the zoom. clampTo covers both: past the
+     home extent the rule flips to keeping the data inside the view. */
+  const clampWiki = function () { clampTo(wView, wHome); };
   const zoomWiki = function (u, k) {
     const fx = (u.x - WK.L) / (WK.W - WK.L - WK.R);
     const fy = (WK.H - WK.B - u.y) / (WK.H - WK.T - WK.B);
@@ -614,6 +650,7 @@ if (svgWiki) {
     const hh = Math.min(mh, Math.max(mh / 90, (wView.y1 - wView.y0) * k));
     wView = {x0: ax - fx * ww, x1: ax + (1 - fx) * ww,
              y0: ay - fy * hh, y1: ay + (1 - fy) * hh};
+    clampWiki();
     wiki();
   };
   svgWiki.addEventListener("wheel", function (ev) {
@@ -637,6 +674,7 @@ if (svgWiki) {
       const dy = (u.y - wDrag.u.y) / (WK.H - WK.T - WK.B) * (wDrag.v.y1 - wDrag.v.y0);
       wView = {x0: wDrag.v.x0 - dx, x1: wDrag.v.x1 - dx,
                y0: wDrag.v.y0 + dy, y1: wDrag.v.y1 + dy};
+      clampWiki();
       tipWiki.hide();
       wiki();
       return;

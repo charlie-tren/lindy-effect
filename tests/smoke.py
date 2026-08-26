@@ -235,13 +235,13 @@ def main():
                 # the era filter must actually remove points, not just restyle a chip
                 if w >= 1280:
                     before = pg.evaluate("""() => [...document.querySelectorAll(
-                        '#scatter circle.pt')].filter(c => c.getAttribute('cx') !== '-99')
-                        .length""")
+                        '#scatter circle.pt')].filter(c => c.getAttribute('display')
+                        !== 'none').length""")
                     pg.select_option("#f-era", "anc")
                     pg.wait_for_timeout(250)
                     after = pg.evaluate("""() => [...document.querySelectorAll(
-                        '#scatter circle.pt')].filter(c => c.getAttribute('cx') !== '-99')
-                        .length""")
+                        '#scatter circle.pt')].filter(c => c.getAttribute('display')
+                        !== 'none').length""")
                     check(after < before / 2,
                           f"{tag}: era filter went {before} -> {after}, expected far fewer")
                     pg.select_option("#f-era", "all")
@@ -255,8 +255,8 @@ def main():
                         pg.select_option(sel, val)
                         pg.wait_for_timeout(250)
                         n = pg.evaluate("""() => [...document.querySelectorAll(
-                            '#scatter circle.pt')].filter(c => c.getAttribute('cx')
-                            !== '-99').length""")
+                            '#scatter circle.pt')].filter(c => c.getAttribute('display')
+                            !== 'none').length""")
                         check(0 < n < before / 2,
                               f"{tag}: the {name} filter left {n} points of {before}")
                         pg.select_option(sel, "all" if sel != "#f-min" else "0")
@@ -269,10 +269,17 @@ def main():
                     # screen first - this exact trap has produced two false failures
                     pg.locator("#scatter").scroll_into_view_if_needed()
                     pg.wait_for_timeout(200)
+                    bx = pg.locator("#scatter").bounding_box()
+                    # ZOOM FIRST. The opening view is the whole data extent and the pan
+                    # is clamped to it, so a drag from home correctly moves nothing -
+                    # testing the pan from there asserted the old unclamped behaviour.
+                    pg.mouse.move(bx["x"] + bx["width"] * .5, bx["y"] + bx["height"] * .5)
+                    for _ in range(6):
+                        pg.mouse.wheel(0, -120)
+                    pg.wait_for_timeout(250)
                     grid0 = pg.evaluate("""() => {
                         const l = document.querySelector('#grid line');
                         return l ? +l.getAttribute('x1') : null; }""")
-                    bx = pg.locator("#scatter").bounding_box()
                     pg.mouse.move(bx["x"] + bx["width"] * .5, bx["y"] + bx["height"] * .5)
                     pg.mouse.down()
                     pg.mouse.move(bx["x"] + bx["width"] * .3,
@@ -282,9 +289,12 @@ def main():
                         const l = document.querySelector('#grid line');
                         const g = document.getElementById('grid');
                         const c = document.getElementById('cloud');
+                        // the pan transform sits on the group INSIDE #cloud, because
+                        // #cloud carries the clip and a clip that moves is not a window
+                        const d = c ? c.querySelector('g') : null;
                         return {x: l ? +l.getAttribute('x1') : null,
                                 gt: g ? g.getAttribute('transform') : 'missing',
-                                ct: c ? c.getAttribute('transform') : 'missing',
+                                ct: d ? d.getAttribute('transform') : 'missing',
                                 fit: document.querySelectorAll('#scatter line.fit').length};
                     }""")
                     check(grid0 is not None and state["x"] is not None
@@ -301,6 +311,110 @@ def main():
                           f"({state['fit']} lines)")
                     pg.mouse.up()
                     pg.wait_for_timeout(200)
+
+                    # REGRESSION: dragging used to summon a straight vertical line of
+                    # books out of nowhere. Points the filters excluded were parked at a
+                    # shared off-canvas x, and a pan translates the whole cloud, so the
+                    # parked column marched into frame - thousands of dots on one x, over
+                    # an axis panned clean off the data. Drag hard both ways and check
+                    # that neither happens: no column may hold a big share of the dots,
+                    # and the age axis must stay somewhere books actually live.
+                    pg.keyboard.press("Escape")
+                    pg.locator("#scatter").dblclick()
+                    pg.wait_for_timeout(250)
+                    for sign in (1, -1):
+                        pg.mouse.move(bx["x"] + bx["width"] * .5,
+                                      bx["y"] + bx["height"] * .5)
+                        pg.mouse.down()
+                        for step in range(1, 7):
+                            pg.mouse.move(
+                                bx["x"] + bx["width"] * (.5 + sign * step * .45),
+                                bx["y"] + bx["height"] * .5, steps=4)
+                        # measured WITH THE BUTTON STILL DOWN: the column appeared
+                        # mid-drag, while the cloud carried its pan transform, and was
+                        # gone again by the time the view was redrawn on release
+                        pg.wait_for_timeout(250)
+                        panned = pg.evaluate(r"""() => {
+                            const c = document.getElementById('cloud');
+                            const d = c.querySelector('g') || c;
+                            const m = /translate\(([-\d.]+)/.exec(
+                                d.getAttribute('transform') || '');
+                            const tx = m ? parseFloat(m[1]) : 0;
+                            const cols = {};
+                            let shown = 0;
+                            for (const p of d.querySelectorAll('circle.pt')) {
+                                if (p.getAttribute('display') === 'none') continue;
+                                const x = parseFloat(p.getAttribute('cx')) + tx;
+                                if (x < 58 || x > 838) continue;     // outside the plot
+                                shown++;
+                                const k = x.toFixed(0);
+                                cols[k] = (cols[k] || 0) + 1;
+                            }
+                            // x ticks only: they are centred under the axis, the
+                            // readership ticks are end-anchored down the left and are
+                            // written '5k', which parseFloat would read as 5
+                            const ticks = [...document.querySelectorAll('#grid text')]
+                                .filter(t => t.getAttribute('text-anchor') === 'middle')
+                                .map(t => parseFloat(t.textContent.replace(/,/g, '')))
+                                .filter(v => v === v);
+                            return {shown: shown, worst: Math.max(0, ...Object.values(cols)),
+                                    minTick: Math.min(...ticks)};
+                        }""")
+                        check(panned["shown"] > 0,
+                              f"{tag}: panning {'right' if sign > 0 else 'left'} emptied "
+                              "the plot entirely")
+                        check(panned["worst"] < panned["shown"] * 0.1,
+                              f"{tag}: {panned['worst']} of {panned['shown']} dots share "
+                              "one x after a hard pan - that is the phantom column, not "
+                              "data")
+                        check(panned["minTick"] >= 1,
+                              f"{tag}: a hard pan put the age axis down to "
+                              f"{panned['minTick']} years, where no book exists")
+                        pg.mouse.up()
+                        pg.wait_for_timeout(200)
+                        pg.locator("#scatter").dblclick()
+                        pg.wait_for_timeout(200)
+
+                    # The Wikipedia plot had the same unclamped pan. No phantom column
+                    # there, because it rebuilds every dot every frame rather than
+                    # translating a cloud, but it could still be dragged off the data
+                    # into an empty frame. Its clamp is the box the ZOOM opens out to,
+                    # three times the home span, so this check is looser than the age
+                    # plot's on purpose.
+                    wk = pg.locator("#wiki")
+                    if wk.count():
+                        wk.scroll_into_view_if_needed()
+                        pg.wait_for_timeout(200)
+                        wb = wk.bounding_box()
+                        for sign in (1, -1):
+                            pg.mouse.move(wb["x"] + wb["width"] * .5,
+                                          wb["y"] + wb["height"] * .5)
+                            pg.mouse.down()
+                            for step in range(1, 7):
+                                pg.mouse.move(
+                                    wb["x"] + wb["width"] * (.5 + sign * step * .45),
+                                    wb["y"] + wb["height"] * .5, steps=4)
+                            pg.wait_for_timeout(250)
+                            wstate = pg.evaluate(r"""() => {
+                                const ticks = [...document.querySelectorAll('#wiki text')]
+                                    .filter(t => t.getAttribute('text-anchor') === 'middle'
+                                             && /^[\d,.]+$/.test(t.textContent))
+                                    .map(t => parseFloat(t.textContent.replace(/,/g, '')));
+                                return {dots: document.querySelectorAll('#wiki circle.pt')
+                                            .length,
+                                        minTick: ticks.length ? Math.min(...ticks) : null};
+                            }""")
+                            way = "right" if sign > 0 else "left"
+                            check(wstate["dots"] > 0,
+                                  f"{tag}: panning the Wikipedia plot {way} emptied it")
+                            check(wstate["minTick"] is not None
+                                  and wstate["minTick"] >= 1,
+                                  f"{tag}: a hard pan put the Wikipedia plot's age axis "
+                                  f"down to {wstate['minTick']} years")
+                            pg.mouse.up()
+                            pg.wait_for_timeout(150)
+                            wk.dblclick()
+                            pg.wait_for_timeout(200)
 
                 # every view draws something
                 counts = pg.evaluate("""() => ({
