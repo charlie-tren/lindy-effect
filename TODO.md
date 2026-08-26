@@ -63,7 +63,8 @@ the books version has shipped.
 
 ## The scatter's full redraw spends 76% of its time formatting tooltips (measured 26/08/2026)
 
-- [ ] **Memoise `fmt`, or build the scatter's tooltip strings lazily on hover.**
+- [x] **DONE 26/08/2026, lazily.** Memoise `fmt`, or build the scatter's tooltip
+      strings lazily on hover.
       `scatter()` is the full redraw: it runs on load, on every filter change, and at the
       end of every drag. Measured on this laptop, desktop Chrome, zoomed to the home view:
 
@@ -90,3 +91,19 @@ the books version has shipped.
       `tools/page.js`** (adding `heroFit()` for the mobile hero labels) and racing it in
       the same file is how work gets swallowed. It is a three-line change; take it when
       the tree is clean.
+
+      **Done the lazy way, not the memo.** `tipper.add` takes a function for the
+      sub-line and `track` calls it only for the point actually being shown, so the
+      formatting cost is one string per hover instead of 10,000 per redraw. The memo
+      would only have helped repeat redraws; building all 10,000 eagerly was wrong
+      whatever the constant factor. Measured back to back on the same machine:
+      `scatter()` 229ms -> 26ms, `wiki()` 63ms -> 20ms. That is faster than before the
+      pan fix raised the dot count (212ms), so the regression is repaid with interest.
+
+      **Neither dot plot had any tooltip coverage** - only the shelf did - so this
+      change could have shipped a blank tooltip silently. The suite now hovers a real
+      dot on both and asserts the CONTENT. First version of that assertion could not
+      fail: assigning the thunk to `textContent` stringifies it to its own source, which
+      contains the phrase being searched for, so it passed on the broken build. It now
+      also rejects anything reading like code, and was re-verified red against the eager
+      assignment before being called done.

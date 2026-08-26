@@ -557,6 +557,63 @@ def main():
                         f"document.getElementById('{tid}').classList.contains('on')")
                     check(got, f"{tag}: hovering the {name} column produced no tooltip")
 
+                # BOTH DOT PLOTS build their tooltip line lazily - `sub` is a function
+                # that only runs for the point being shown, because formatting 10,000 of
+                # them per redraw cost 260ms of a 335ms redraw. Only the shelf was
+                # covered above, so a thunk that returned undefined, or one stringified
+                # into "function () { ... }", would have shipped silently. Assert the
+                # CONTENT, not just that the tooltip opened.
+                if w >= 1280:
+                    for svg_id, tid, name, want in [
+                            ("scatter", "tip", "age plot", "readers a month"),
+                            ("wiki", "tip5", "Wikipedia plot", "views a year")]:
+                        loc = pg.locator("#" + svg_id)
+                        if not loc.count():
+                            continue
+                        loc.scroll_into_view_if_needed()
+                        pg.wait_for_timeout(200)
+                        # a real dot's position in VIEWPORT coordinates - mouse.move takes
+                        # those, and these charts sit well down a long page
+                        spot = pg.evaluate(
+                            "(id) => {"
+                            "  const s = document.getElementById(id);"
+                            "  const r = s.getBoundingClientRect();"
+                            "  const vb = s.viewBox.baseVal;"
+                            "  const d = s.querySelector('circle.pt:not([display=\"none\"])');"
+                            "  if (!d || !r.width) return null;"
+                            "  return {x: r.left + (+d.getAttribute('cx')) / vb.width * r.width,"
+                            "          y: r.top + (+d.getAttribute('cy')) / vb.height * r.height};"
+                            "}", svg_id)
+                        check(spot is not None,
+                              f"{tag}: found no drawn dot on the {name} to hover")
+                        if not spot:
+                            continue
+                        pg.mouse.move(spot["x"], spot["y"])
+                        pg.wait_for_timeout(180)
+                        tip = pg.evaluate(
+                            "(id) => {"
+                            "  const t = document.getElementById(id);"
+                            "  const b = t.querySelector('b'), s = t.querySelector('span');"
+                            "  return {on: t.classList.contains('on'),"
+                            "          head: b ? b.textContent : '',"
+                            "          sub: s ? s.textContent : ''};"
+                            "}", tid)
+                        check(tip["on"],
+                              f"{tag}: hovering a dot on the {name} produced no tooltip")
+                        check(len(tip["head"]) > 0,
+                              f"{tag}: the {name} tooltip has no title")
+                        # `want in sub` ALONE cannot catch the obvious regression:
+                        # assigning the thunk itself to textContent stringifies it to its
+                        # own SOURCE, which contains the wanted phrase as a literal. So
+                        # also reject anything that reads like code. Verified by putting
+                        # the eager assignment back and watching this go red.
+                        looks_like_source = ("function" in tip["sub"]
+                                             or "return" in tip["sub"])
+                        check(want in tip["sub"] and not looks_like_source,
+                              f"{tag}: the {name} tooltip line is {tip['sub'][:90]!r}, "
+                              f"expected formatted text containing {want!r} - the lazy "
+                              "sub-line either did not run or was rendered as source")
+
 
                 # the page must be legible in this theme, not just present
                 col = pg.evaluate("""() => {

@@ -179,6 +179,10 @@ function tipper(tipId, svg) {
   let hits = [];
   return {
     reset: function () { hits = []; },
+    /* `sub` may be a function, and on the dot plots it always is. Building the line
+       eagerly meant formatting 10,000 of them per redraw so that ONE could be shown:
+       measured at 260ms of a 335ms redraw, 254ms of which was toLocaleString. The
+       redraw runs on load, on every filter change and at the end of every drag. */
     add: function (x, y, head, sub) { hits.push({x: x, y: y, head: head, sub: sub}); },
     hide: function () { tip.classList.remove("on"); },
     /* xonly snaps to the nearest column regardless of vertical position, which is how
@@ -196,7 +200,7 @@ function tipper(tipId, svg) {
       const b = document.createElement("b");
       b.textContent = best.head;
       const sp = document.createElement("span");
-      sp.textContent = best.sub;
+      sp.textContent = typeof best.sub === "function" ? best.sub() : best.sub;
       tip.appendChild(b);
       tip.appendChild(sp);
       const r = svg.getBoundingClientRect();
@@ -583,9 +587,10 @@ function scatter() {
     if (!inEra(p)) return;
     shown++;
     const X = spx(lx), Y = spy(ly);
-    tipScatter.add(X, Y, p.t || "?",
-      (p.au ? p.au + DOT : "") + fmt(p.a) + " yrs old" + DOT + fmt(p.d)
-      + " readers a month");
+    tipScatter.add(X, Y, p.t || "?", function () {
+      return (p.au ? p.au + DOT : "") + fmt(p.a) + " yrs old" + DOT + fmt(p.d)
+        + " readers a month";
+    });
   });
   const fitPairs = [];
   D.scatter.points.forEach(function (p) {
@@ -743,8 +748,10 @@ function wiki() {
     const X = px(lx), Y = py(ly);
     svgWiki.appendChild(el("circle", {class: "pt", cx: X.toFixed(1), cy: Y.toFixed(1),
       r: 3.4, opacity: 0.6}));
-    tipWiki.add(X, Y, p.t, fmt(p.a) + " yrs old" + DOT + fmt(p.w)
-      + " Wikipedia views a year" + DOT + fmt(p.d) + " Gutenberg readers a month");
+    tipWiki.add(X, Y, p.t, function () {
+      return fmt(p.a) + " yrs old" + DOT + fmt(p.w) + " Wikipedia views a year"
+        + DOT + fmt(p.d) + " Gutenberg readers a month";
+    });
   });
   drawFit(svgWiki, fitLine(pts.map(function (q) {
     return [Math.log10(q.a), Math.log10(q.w)];
