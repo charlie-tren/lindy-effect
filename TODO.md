@@ -60,3 +60,33 @@ the books version has shipped.
       `tools/test_estate_head.mjs` checks against the live page. Verified by removing
       one from the built HTML: three failures, one per theme/width. The suite now
       reports `All checks passed` for the first time since the beacon landed.
+
+## The scatter's full redraw spends 76% of its time formatting tooltips (measured 26/08/2026)
+
+- [ ] **Memoise `fmt`, or build the scatter's tooltip strings lazily on hover.**
+      `scatter()` is the full redraw: it runs on load, on every filter change, and at the
+      end of every drag. Measured on this laptop, desktop Chrome, zoomed to the home view:
+
+      | | before the pan fix (7,309 dots) | after (10,000 dots) |
+      |---|---|---|
+      | `furniture()`, once per drag frame | 1.9 ms | 4.2 ms |
+      | `placeCloud()`, on zoom and release | 13 ms | 21 ms |
+      | `scatter()`, full redraw | 212 ms | 297 ms |
+
+      Dragging is fine and always was: 4.2 ms sits well inside a 16 ms frame. The full
+      redraw is the problem, and it is almost entirely ONE thing. Of a 335 ms run,
+      building the tooltip hit-list costs 260 ms, and the same loop with the two
+      `toLocaleString()` calls removed costs 6.4 ms. So 76% of the entire redraw is
+      number formatting, for tooltips on 10,000 dots of which a reader hovers maybe one.
+      `placeCloud`, the part that actually touches the DOM, is 29 ms of it.
+
+      Cheapest fix is a memo inside `fmt`, a `Map` from number to formatted string: ages
+      and read counts repeat heavily across 10,000 books, so the cache hits constantly.
+      That should take the redraw under 100 ms, better than it has ever been. Building
+      the strings lazily on hover is the thorough version and a larger change to
+      `tipper()`.
+
+      **Not fixed on the day it was measured because another session was live in
+      `tools/page.js`** (adding `heroFit()` for the mobile hero labels) and racing it in
+      the same file is how work gets swallowed. It is a three-line change; take it when
+      the tree is clean.
