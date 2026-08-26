@@ -286,9 +286,20 @@ svgShelf.addEventListener("pointerleave", function () { tipShelf.hide(); });
 /* --------------------------------------------- scatter: zoom, pan and hover */
 const SC = {W: 960, H: 470, L: 58, R: 122, T: 26, B: 52};
 /* The plot holds only the most-read works, so it is truncated at the bottom. Read that
-   floor OFF THE DATA rather than rounding it to 1,000: the cut moves every time the
-   corpus is refetched, and a hard 1,000 sat ABOVE it, so thousands of real books were
-   below the opening view and could never be panned to. */
+   floor OFF THE DATA rather than rounding it to 1,000, and do not round it back.
+
+   MEASURED 26/08/2026, because the round number is the tempting change and it is wrong.
+   The cut moves every refetch - 766, then 732, then 815 over three weeks - so any
+   constant drifts, and a hard 1,000 sat ABOVE the cut, hiding 2,691 of the 10,000
+   plotted books below the opening view where no pan could reach them. The page's own
+   note and the r-squared label both say 10,000, so it was claiming what it would not
+   show, and the fit was drawn over points a reader could not audit.
+
+   The one argument for rounding up is that the extra books thicken the truncation shelf.
+   They do not, much. Counting the sample in 18px strips walking up from each candidate
+   floor: from 774 it goes 2679, 2063, 1293, 866; from 1,000 it goes 2060, 1289, 865,
+   678. Cropping does not remove the dense bottom edge, it moves it - 2,691 books spent
+   for an edge 77% as dense. That density is the power law, not the cut. */
 const READ_MIN = D.scatter.points.reduce((m, p) => Math.min(m, p.d), Infinity);
 const HOME = {x0: Math.log10(5), x1: Math.log10(3200),
               y0: Math.log10(READ_MIN * 0.95), y1: Math.log10(200000)};
