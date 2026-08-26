@@ -69,6 +69,17 @@ def main():
                     ctx.add_init_script(
                         "try{localStorage.setItem('lc-theme','light')}catch(e){}")
                 pg = ctx.new_page()
+                # STUB THE ANALYTICS BEACONS. Both are third-party hosts and neither will
+                # accept a preflight from http://127.0.0.1:<random port>, so every local
+                # run logged three CORS failures and the suite printed FAIL(3) on a clean
+                # checkout. A suite that is always red is a suite nobody reads, and it
+                # cost a baseline run against an untouched tree to work out which of the
+                # failures were furniture. Fulfilled with a 204 rather than aborted, so
+                # there is no network error to log either. Their PRESENCE is asserted
+                # below, so stubbing them cannot hide their removal.
+                for host in ("**static.cloudflareinsights.com/**",
+                             "**beacon.charlietrenorden.com/**"):
+                    ctx.route(host, lambda r: r.fulfill(status=204, body=""))
                 errs = []
                 pg.on("console", lambda m: m.type == "error" and errs.append(m.text))
                 pg.on("pageerror", lambda e: errs.append(str(e)))
@@ -76,6 +87,17 @@ def main():
                 pg.wait_for_timeout(700)
 
                 check(not errs, f"{tag}: console errors {errs[:2]}")
+
+                # The stub above silences the beacons' network failure, so the tags
+                # themselves have to be asserted or a session could delete the analytics
+                # and this suite would go quiet about it. Same pair the estate-wide
+                # tools/test_estate_head.mjs checks against the live page.
+                html = pg.content()
+                for host, what in [("static.cloudflareinsights.com/beacon.min.js",
+                                    "the Cloudflare beacon"),
+                                   ("beacon.charlietrenorden.com/b.js",
+                                    "the estate beacon")]:
+                    check(host in html, f"{tag}: {what} is missing from the page")
 
                 sw = pg.evaluate("document.documentElement.scrollWidth")
                 iw = pg.evaluate("window.innerWidth")

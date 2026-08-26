@@ -36,8 +36,8 @@ the books version has shipped.
 
 ## The smoke suite cannot go green on a laptop (found 26/08/2026)
 
-- [ ] **Let `tests/smoke.py` ignore the analytics beacons' CORS errors when it is not
-      running against the live origin.** Since the Cloudflare Web Analytics beacon landed
+- [x] **DONE 26/08/2026.** Let `tests/smoke.py` ignore the analytics beacons' CORS
+      errors when it is not running against the live origin. Since the Cloudflare Web Analytics beacon landed
       (`ed96b24`), every local run reports `FAIL (3)` - one per theme/width - because
       `cloudflareinsights.com` refuses a preflight from `http://127.0.0.1:<random port>`
       and the console-error check catches it. The failure is real in the sense that the
@@ -51,3 +51,12 @@ the books version has shipped.
       when `base` is localhost, and to keep asserting them when it runs against the
       deployed page. Do NOT simply drop the console-error check: it is the only thing
       that would catch a real script error on the page.
+      **How it was done:** the two beacon hosts are stubbed with `ctx.route(...)`
+      fulfilling a 204, rather than filtered out of the error list - there is then no
+      network failure to log at all, and the run stops depending on whether the laptop
+      has a connection. The console-error check is untouched and still catches a real
+      script error. Because a stub could hide the beacons being deleted, the suite now
+      also asserts both `<script>` tags are present, the same pair the estate-wide
+      `tools/test_estate_head.mjs` checks against the live page. Verified by removing
+      one from the built HTML: three failures, one per theme/width. The suite now
+      reports `All checks passed` for the first time since the beacon landed.
