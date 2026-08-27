@@ -93,6 +93,14 @@ def main():
                 # and this suite would go quiet about it. Same pair the estate-wide
                 # tools/test_estate_head.mjs checks against the live page.
                 html = pg.content()
+                # The beacons are injected by an inline gate now, and this browser
+                # IS automation, so the gate correctly refuses to inject them. The
+                # URLs below are therefore checked as text in the loader, which is
+                # what proves the page carries analytics at all; whether the gate
+                # then admits a real person is site-stats' tests/test_gate.py.
+                check("ct.nostats" in html and "navigator.webdriver" in html,
+                      f"{tag}: analytics are ungated, so every agent counts as "
+                      f"audience")
                 for host, what in [("static.cloudflareinsights.com/beacon.min.js",
                                     "the Cloudflare beacon"),
                                    ("beacon.charlietrenorden.com/b.js",
