@@ -50,7 +50,18 @@ a{color:var(--gilt);text-underline-offset:3px}
   display:inline-flex;align-items:center;gap:.45rem;transition:color .2s,border-color .2s}
 .tog:hover{color:var(--ink);border-color:var(--gilt)}
 .tog .dot{width:7px;height:7px;border-radius:50%;background:var(--gilt)}
-.mastr{display:inline-flex;align-items:center;gap:1.15rem}
+.mastr{display:inline-flex;align-items:center;gap:1.15rem;justify-content:flex-end}
+/* Theme toggle first, back-link last, which is the order Beyond Small Talk,
+   Split the Room, Spectrum, Ghostwriters and Equity Research all use. Left in
+   source order the link sat 107px short of the right edge on a phone, so it
+   read as right-ish rather than as the same control in the same place. Only
+   two children here, so one explicit order and one default is unambiguous. */
+.mastr .back{order:2}
+/* The masthead is space-between, which puts this group right while it shares a
+   line with the wordmark. On a phone it wraps to a line of its own and reverts
+   to the left, on the opposite side from the rest of the estate. A wrapped
+   element needs a new alignment, not the old one. */
+@media (max-width:640px){ .mast{flex-wrap:wrap} .mastr{width:100%} }
 .mast{display:flex;align-items:baseline;justify-content:space-between;gap:1.15rem;
       flex-wrap:wrap;border-bottom:1px solid var(--rule);padding-bottom:.8rem}
 .wm{font:400 clamp(26px,5vw,36px)/1 var(--body);font-variant:small-caps;
@@ -139,8 +150,8 @@ footer{margin-top:3rem;padding-top:1.15rem;border-top:1px solid var(--rule);
        font-size:.88rem;color:var(--dim)}
 
 .g{stroke:var(--rule);stroke-width:1}
-.ax{font:400 10px var(--mono);fill:var(--dim)}
-.axl{font:700 9px var(--disp);letter-spacing:.16em;fill:var(--dim)}
+.ax{font:400 11px var(--mono);fill:var(--dim)}
+.axl{font:700 10px var(--disp);letter-spacing:.16em;fill:var(--dim)}
 .hdl{font:400 19px var(--body);fill:var(--ink);letter-spacing:-.01em}
 .sp{stroke-width:0}
 .cv{fill:none;stroke:var(--gilt);stroke-width:2.2}
@@ -172,7 +183,8 @@ footer{margin-top:3rem;padding-top:1.15rem;border-top:1px solid var(--rule);
 }
 </style>
 <!-- Cloudflare Web Analytics - same estate-wide token as the hub root. See index.html. -->
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "32b821209b5441a08df42ccf61c9e6c2"}'></script>
+<script>/* Analytics, gated. Two kinds of visitor are not an audience: anyone who has opted out with ?nostats=1, and automation - navigator.webdriver is the one signal true for Playwright, Puppeteer and Selenium alike. Inline and dependency-free on purpose: served from the Worker, a bad deploy there would stop analytics on every site. See site-stats/beacon. */
+(function(){try{var X="ct.nostats",C="ct_nostats",D=";path=/;domain=.charlietrenorden.com",q=location.search,out=false;if(q.indexOf("nostats=1")>-1){try{localStorage.setItem(X,"1")}catch(e){}document.cookie=C+"=1"+D+";max-age=63072000;samesite=lax";}if(q.indexOf("nostats=0")>-1){try{localStorage.removeItem(X)}catch(e){}document.cookie=C+"="+D+";max-age=0";}try{out=!!localStorage.getItem(X)}catch(e){}if(!out)out=document.cookie.indexOf(C+"=1")>-1;if(out||navigator.webdriver)return;var d=document,s;s=d.createElement("script");s.defer=true;s.src="https://static.cloudflareinsights.com/beacon.min.js";s.setAttribute("data-cf-beacon",'\x7b"token": "32b821209b5441a08df42ccf61c9e6c2"\x7d');d.head.appendChild(s);s=d.createElement("script");s.defer=true;s.src="https://beacon.charlietrenorden.com/b.js";d.head.appendChild(s);}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -381,6 +393,73 @@ function pinchZoom(svg, G, zoom, cancelDrag) {
   svg.addEventListener("pointerleave", drop);
 }
 
+/* The hero curve is generated server-side at a fixed 960-unit width, so unlike the
+   three charts below it cannot be re-laid-out here: its label positions were solved in
+   that coordinate space by a separation sweep in build.py. What it CAN stop doing is
+   pretending six labels fit on a phone.
+
+   `k` is user units per rendered pixel. Setting a font to `size * k` units renders it
+   at exactly `size` pixels whatever the scale, so the labels come back to a real size
+   instead of 4px. Below about 600px rendered, the middle callouts come off entirely:
+   six labels do not fit on a 342px curve at any legible size, and a label that does
+   not fit is deleted rather than shrunk. Both ENDS always stay, because placing the
+   oldest and the newest work is the whole claim the picture makes. Every dot stays,
+   and every one of them is already on the tooltip.
+
+   Nothing happens above 768px rendered, so the desktop drawing is untouched. */
+function heroFit() {
+  const svg = document.querySelector("#v-curve figure svg");
+  if (!svg) return;
+  const vb = (svg.viewBox && svg.viewBox.baseVal.width) || 960;
+  const shown = svg.getBoundingClientRect().width || vb;
+  const k = vb / shown;
+  const labels = [].slice.call(svg.querySelectorAll(".mkl"));
+  const drop = k > 1.6 && labels.length > 2;
+  const scale = k > 1.25;
+  labels.forEach(function (t, i) {
+    const keep = !drop || i === 0 || i === labels.length - 1;
+    t.style.display = keep ? "" : "none";
+    t.style.fontSize = (keep && scale) ? (10.5 * k).toFixed(1) + "px" : "";
+  });
+  [[".axl", 10], [".ax", 11], [".note", 11], [".fitl", 11]].forEach(function (pair) {
+    [].slice.call(svg.querySelectorAll(pair[0])).forEach(function (t) {
+      t.style.fontSize = scale ? (pair[1] * k).toFixed(1) + "px" : "";
+    });
+  });
+
+  /* build.py placed each label clear of the curve at its ORIGINAL size, so growing
+     one drops its baseline box onto the curve: at 375 The Odyssey landed on it. Lift
+     whatever is now touching. Sampled across the label's own x range rather than at
+     its midpoint, because in the steep shoulder the curve falls further under the far
+     end of a label than under its centre.
+
+     Every label is reset to the y build.py gave it first, so this is idempotent and a
+     resize does not accumulate lifts. */
+  const cv = svg.querySelector("path.cv");
+  if (!cv || !cv.getTotalLength) return;
+  const len = cv.getTotalLength();
+  const yAt = function (x) {
+    let lo = 0, hi = len;
+    for (let i = 0; i < 24; i++) {
+      const m = (lo + hi) / 2;
+      if (cv.getPointAtLength(m).x < x) { lo = m; } else { hi = m; }
+    }
+    return cv.getPointAtLength(lo).y;
+  };
+  labels.forEach(function (t) {
+    if (t.dataset.y0 === undefined) t.dataset.y0 = t.getAttribute("y");
+    t.setAttribute("y", t.dataset.y0);
+    if (t.style.display === "none") return;
+    const bb = t.getBBox();
+    let top = Infinity;
+    for (let i = 0; i <= 20; i++) top = Math.min(top, yAt(bb.x + bb.width * i / 20));
+    const clear = top - (bb.y + bb.height);
+    if (clear < 4) {
+      t.setAttribute("y", (parseFloat(t.dataset.y0) - (4 - clear)).toFixed(1));
+    }
+  });
+}
+
 function heroLabels() {
   var svg = document.querySelector("#v-curve svg");
   if (!svg) return;
@@ -409,6 +488,10 @@ function tipper(tipId, svg) {
   let hits = [];
   return {
     reset: function () { hits = []; },
+    /* `sub` may be a function, and on the dot plots it always is. Building the line
+       eagerly meant formatting 10,000 of them per redraw so that ONE could be shown:
+       measured at 260ms of a 335ms redraw, 254ms of which was toLocaleString. The
+       redraw runs on load, on every filter change and at the end of every drag. */
     add: function (x, y, head, sub) { hits.push({x: x, y: y, head: head, sub: sub}); },
     hide: function () { tip.classList.remove("on"); },
     /* xonly snaps to the nearest column regardless of vertical position, which is how
@@ -426,7 +509,7 @@ function tipper(tipId, svg) {
       const b = document.createElement("b");
       b.textContent = best.head;
       const sp = document.createElement("span");
-      sp.textContent = best.sub;
+      sp.textContent = typeof best.sub === "function" ? best.sub() : best.sub;
       tip.appendChild(b);
       tip.appendChild(sp);
       const r = svg.getBoundingClientRect();
@@ -440,6 +523,20 @@ function tipper(tipId, svg) {
       tip.classList.add("on");
     }
   };
+}
+/* Keep a pan/zoom view sitting on top of its data: it may never be dragged so far that
+   the data leaves the frame. Zoomed IN, the view has to stay inside the data extent;
+   zoomed OUT past that extent it has to contain it instead. That is one rule seen from
+   two sides, so both fall out of a single clamp on where the low edge may sit, and there
+   is no second copy to drift. Panning was clamped on one edge of one axis before this,
+   which is how a drag could carry a plot clean off its own cloud. */
+function clampTo(v, home) {
+  const w = v.x1 - v.x0, h = v.y1 - v.y0;
+  const xa = home.x0, xb = home.x1 - w, ya = home.y0, yb = home.y1 - h;
+  const x0 = Math.min(Math.max(v.x0, Math.min(xa, xb)), Math.max(xa, xb));
+  const y0 = Math.min(Math.max(v.y0, Math.min(ya, yb)), Math.max(ya, yb));
+  v.x0 = x0; v.x1 = x0 + w;
+  v.y0 = y0; v.y1 = y0 + h;
 }
 function userPos(svg, ev, W, H) {
   const r = svg.getBoundingClientRect();
@@ -495,15 +592,60 @@ if (svgHero && document.getElementById("tip6")) {
   svgHero.addEventListener("pointerleave", function () { tipHero.hide(); });
 }
 
+/* Size a chart's viewBox off its RENDERED width, so one user unit is one CSS pixel.
+
+   A fixed `viewBox="0 0 960 ..."` scaled into a 390px phone shrinks every label with
+   it: these four charts declared 9-10px and rendered at 4, measured off the live page
+   with getBoundingClientRect. Nothing in the CSS or the computed font-size says so -
+   `getComputedStyle(text).fontSize` reports the user-unit size and looks perfectly
+   healthy - which is why it sat there unnoticed. Pendulum and Inequality render the
+   same declared sizes at 15px because they do this.
+
+   Margins come off the render too. 180px of gutter is a fifth of a 960 canvas and
+   more than half of a 342 one, so a set that is right on a desktop leaves a phone
+   with no plot at all. Each box carries both, and the narrow set is chosen by
+   measurement rather than by a media query, because the container is not the window:
+   the same chart is narrower inside a padded card than the viewport suggests. */
+/* A log axis puts 1, 2 and 5 in every decade, so at a phone's width the top of one
+   decade lands on the bottom of the next: "1,000" printed into "2,000". Keep every
+   grid LINE and drop only the label that will not clear its neighbour.
+
+   A separation guard rather than a per-width tick list, because both of these axes
+   ZOOM. Any fixed choice of which ticks to label is wrong at some magnification, and
+   the guard is right at all of them. */
+function spacer(min) {
+  let last = -Infinity;
+  return function (x) {
+    if (x - last < min) return false;
+    last = x;
+    return true;
+  };
+}
+
+function fitBox(svg, box) {
+  const w = Math.round(svg.getBoundingClientRect().width) || box.W;
+  if (w > 0) box.W = w;
+  Object.assign(box, w < 560 ? box.narrow : box.wide);
+  svg.setAttribute("viewBox", "0 0 " + box.W + " " + box.H);
+  return box;
+}
+
 /* --------------- shelf: how many books from each century are still read above a bar */
 const svgShelf = document.getElementById("shelf");
 const tipShelf = tipper("tip3", svgShelf);
-const SH = {W: 960, H: 280};
+const SH = {W: 960, H: 280,
+            wide:   {H: 286, L: 58, R: 14, T: 18, B: 62, step: 2},
+            narrow: {H: 320, L: 56, R: 10, T: 14, B: 68, step: 4}};
 let thresh = "200";
 function shelf(st) {
   clear(svgShelf);
   tipShelf.reset();
-  const W = SH.W, H = SH.H, L = 58, R = 14, T = 18, B = 56;
+  fitBox(svgShelf, SH);
+  const W = SH.W, H = SH.H, L = SH.L, R = SH.R, T = SH.T, B = SH.B;
+  // Twenty-four centuries into 300px is a 12px bar, so every second label still
+  // overprints its neighbour. Thinning is the only answer that keeps them legible;
+  // every bar is on the tooltip either way.
+  const STEP = SH.step;
   // newest on the LEFT, oldest on the RIGHT, matching the curve above
   const bars = st.shelf.bars.slice().reverse();
   if (!bars.length) return;
@@ -531,7 +673,7 @@ function shelf(st) {
     svgShelf.appendChild(el("rect", {x: (x + bw * 0.14).toFixed(1), y: yTop.toFixed(1),
       width: (bw * 0.72).toFixed(1), height: Math.max(0.5, H - B - yTop).toFixed(1),
       fill: "var(--c" + band(b.y) + ")", "data-year": b.y}));
-    if (i % 2 === 0 || i === bars.length - 1) {
+    if ((bars.length - 1 - i) % STEP === 0) {
       const g = el("g", {transform: "rotate(-44 " + (x + bw / 2).toFixed(1) + " "
         + (H - B + 15) + ")"});
       g.appendChild(txt(cLab(b.c), {class: "ax", x: (x + bw / 2).toFixed(1),
@@ -567,16 +709,37 @@ svgShelf.addEventListener("pointerleave", function () { tipShelf.hide(); });
 
 
 //: Both dot plots pan and zoom, and neither said so. Kept on the status line the
-//: charts already write to rather than added as a caption under them.
-const GESTURES = "drag to pan, scroll to zoom, double-click to reset";
+//: charts already write to rather than added as a caption under them. A phone has
+//: no wheel and no double-click, so it is told about the gestures it actually has.
+const GESTURES = window.matchMedia("(pointer: coarse)").matches
+  ? "drag to pan, pinch to zoom"
+  : "drag to pan, scroll to zoom, double-click to reset";
 
 /* --------------------------------------------- scatter: zoom, pan and hover */
-const SC = {W: 960, H: 470, L: 58, R: 122, T: 26, B: 52};
-/* The plot holds only the 10,000 most-read works, so there is nothing below about 766
-   a month. Panning under 1,000 just showed empty space, so the view is clamped there. */
-const YFLOOR = Math.log10(1000);
+const SC = {W: 960, H: 470, L: 58, R: 122, T: 26, B: 52,
+            wide:   {H: 470, L: 58, R: 122, T: 26, B: 52},
+            /* R drops from 122 to 12: that gutter exists to keep the fit label off
+               the cloud, and on a phone it was costing more than a third of the
+               plot. The label is right-aligned inside the plot instead. */
+            narrow: {H: 430, L: 54, R: 12, T: 22, B: 46}};
+/* The plot holds only the most-read works, so it is truncated at the bottom. Read that
+   floor OFF THE DATA rather than rounding it to 1,000, and do not round it back.
+
+   MEASURED 26/08/2026, because the round number is the tempting change and it is wrong.
+   The cut moves every refetch - 766, then 732, then 815 over three weeks - so any
+   constant drifts, and a hard 1,000 sat ABOVE the cut, hiding 2,691 of the 10,000
+   plotted books below the opening view where no pan could reach them. The page's own
+   note and the r-squared label both say 10,000, so it was claiming what it would not
+   show, and the fit was drawn over points a reader could not audit.
+
+   The one argument for rounding up is that the extra books thicken the truncation shelf.
+   They do not, much. Counting the sample in 18px strips walking up from each candidate
+   floor: from 774 it goes 2679, 2063, 1293, 866; from 1,000 it goes 2060, 1289, 865,
+   678. Cropping does not remove the dense bottom edge, it moves it - 2,691 books spent
+   for an edge 77% as dense. That density is the power law, not the cut. */
+const READ_MIN = D.scatter.points.reduce((m, p) => Math.min(m, p.d), Infinity);
 const HOME = {x0: Math.log10(5), x1: Math.log10(3200),
-              y0: YFLOOR, y1: Math.log10(200000)};
+              y0: Math.log10(READ_MIN * 0.95), y1: Math.log10(200000)};
 let view = Object.assign({}, HOME);
 const svgScatter = document.getElementById("scatter");
 const tipScatter = tipper("tip", svgScatter);
@@ -601,30 +764,48 @@ function scatterSoon() {
   scQueued = true;
   requestAnimationFrame(function () { scQueued = false; scatter(); });
 }
-let ptsG = null;
+let ptsG = null, dotsG = null, defsG = null;
 function buildCloud() {
   /* The cloud is built ONCE and its circles are then repositioned on pan and zoom.
      Recreating 4,800 SVG nodes every frame is what made dragging feel sticky; setting
      two attributes on existing nodes is far cheaper. A group transform would be cheaper
      still, but log-log zoom needs a non-uniform scale, which turns the dots into
-     ellipses - so this is the fast option that stays correct. */
-  ptsG = el("g", {id: "cloud"});
+     ellipses - so this is the fast option that stays correct.
+     THREE LAYERS, and the order matters: the clip has to sit OUTSIDE the pan transform
+     or it slides away with the dots and stops being a window on the plot. So ptsG is
+     clipped and never moves, dotsG carries the drag translate, circles live in dotsG. */
+  defsG = el("defs");
+  const cp = el("clipPath", {id: "plotclip"});
+  cp.appendChild(el("rect", {x: SC.L, y: SC.T, width: SC.W - SC.L - SC.R,
+    height: SC.H - SC.T - SC.B}));
+  defsG.appendChild(cp);
+  ptsG = el("g", {id: "cloud", "clip-path": "url(#plotclip)"});
+  dotsG = el("g");
+  ptsG.appendChild(dotsG);
   D.scatter.points.forEach(function () {
-    ptsG.appendChild(el("circle", {class: "pt sp", cx: -99, cy: -99, r: 2.9,
+    dotsG.appendChild(el("circle", {class: "pt sp", cx: 0, cy: 0, r: 2.9,
       opacity: 0.5}));
   });
 }
 function placeCloud() {
-  const kids = ptsG.childNodes, pts = D.scatter.points;
+  const kids = dotsG.childNodes, pts = D.scatter.points;
   for (let i = 0; i < pts.length; i++) {
     const p = pts[i], c = kids[i];
-    const lx = Math.log10(p.a), ly = Math.log10(p.d);
-    if (lx < view.x0 || lx > view.x1 || ly < view.y0 || ly > view.y1 || !inEra(p)) {
-      if (c.getAttribute("cx") !== "-99") c.setAttribute("cx", -99);
+    /* A dot the filters exclude is HIDDEN, never parked off-canvas. Parking put
+       thousands of them on one shared x, and a pan translates the whole group, so the
+       parked column marched into frame as a straight vertical line of phantom books.
+       display:none cannot be dragged back into view; an off-canvas coordinate can. */
+    if (!inEra(p)) {
+      if (c.getAttribute("display") !== "none") c.setAttribute("display", "none");
       continue;
     }
-    c.setAttribute("cx", spx(lx).toFixed(1));
-    c.setAttribute("cy", spy(ly).toFixed(1));
+    if (c.getAttribute("display") === "none") c.removeAttribute("display");
+    /* Placed whether or not it is currently in view, and left to the clip to hide.
+       Placing only the visible ones meant a drag - which just translates the group -
+       could never bring a new dot in, so the cloud thinned out as you panned and
+       snapped back on release. */
+    c.setAttribute("cx", spx(Math.log10(p.a)).toFixed(1));
+    c.setAttribute("cy", spy(Math.log10(p.d)).toFixed(1));
   }
 }
 let era = "all", lang = "all", minRead = 0, subj = "all";
@@ -656,15 +837,17 @@ function furniture() {
   const keep = ptsG;
   const drop = [];
   for (let i = 0; i < svgScatter.childNodes.length; i++) {
-    if (svgScatter.childNodes[i] !== keep) drop.push(svgScatter.childNodes[i]);
+    const n = svgScatter.childNodes[i];
+    if (n !== keep && n !== defsG) drop.push(n);
   }
   drop.forEach(function (n) { svgScatter.removeChild(n); });
   gridG = el("g", {id: "grid"});
   svgScatter.insertBefore(gridG, keep || null);
+  const okX1 = spacer(42);
   ticks(view.x0, view.x1).forEach(function (v) {
     const X = spx(Math.log10(v));
     gridG.appendChild(el("line", {class: "g", x1: X, y1: SC.T, x2: X, y2: SC.H - SC.B}));
-    gridG.appendChild(txt(fmt(v), {class: "ax", x: X, y: SC.H - SC.B + 18,
+    if (okX1(X)) gridG.appendChild(txt(fmt(v), {class: "ax", x: X, y: SC.H - SC.B + 18,
       "text-anchor": "middle"}));
   });
   ticks(view.y0, view.y1).forEach(function (v) {
@@ -689,13 +872,15 @@ function furniture() {
 function scatter() {
   clear(svgScatter);
   tipScatter.reset();
+  fitBox(svgScatter, SC);
   gridG = el("g", {id: "grid"});
   svgScatter.appendChild(gridG);
+  const okX2 = spacer(42);
   ticks(view.x0, view.x1).forEach(function (v) {
     const X = spx(Math.log10(v));
     gridG.appendChild(el("line", {class: "g", x1: X, y1: SC.T, x2: X,
       y2: SC.H - SC.B}));
-    gridG.appendChild(txt(fmt(v), {class: "ax", x: X, y: SC.H - SC.B + 18,
+    if (okX2(X)) gridG.appendChild(txt(fmt(v), {class: "ax", x: X, y: SC.H - SC.B + 18,
       "text-anchor": "middle"}));
   });
   ticks(view.y0, view.y1).forEach(function (v) {
@@ -708,6 +893,7 @@ function scatter() {
 
   if (!ptsG) buildCloud();
   placeCloud();
+  svgScatter.appendChild(defsG);
   svgScatter.appendChild(ptsG);
 
   let shown = 0;
@@ -717,9 +903,10 @@ function scatter() {
     if (!inEra(p)) return;
     shown++;
     const X = spx(lx), Y = spy(ly);
-    tipScatter.add(X, Y, p.t || "?",
-      (p.au ? p.au + DOT : "") + fmt(p.a) + " yrs old" + DOT + fmt(p.d)
-      + " readers a month");
+    tipScatter.add(X, Y, p.t || "?", function () {
+      return (p.au ? p.au + DOT : "") + fmt(p.a) + " yrs old" + DOT + fmt(p.d)
+        + " readers a month";
+    });
   });
   const fitPairs = [];
   D.scatter.points.forEach(function (p) {
@@ -745,13 +932,7 @@ function scatter() {
     + (z > 1.05 ? DOT + "zoomed " + z.toFixed(1) + "x" : "");
 }
 
-function clampView() {
-  if (view.y0 < YFLOOR) {
-    const h = view.y1 - view.y0;
-    view.y0 = YFLOOR;
-    view.y1 = YFLOOR + h;
-  }
-}
+function clampView() { clampTo(view, HOME); }
 // Zoom about a point, shared by the wheel and by pinch on touch. Extracted rather
 // than duplicated: the clamp rules here are the ones that keep the view inside the
 // data, and a second copy would drift away from them.
@@ -783,7 +964,7 @@ svgScatter.addEventListener("pointerdown", function (ev) {
 svgScatter.addEventListener("pointerup", function () {
   dragging = null;
   svgScatter.classList.remove("drag");
-  if (ptsG) ptsG.setAttribute("transform", "");
+  if (dotsG) dotsG.setAttribute("transform", "");
   if (gridG) gridG.setAttribute("transform", "");
   scatter();
 });
@@ -797,17 +978,19 @@ svgScatter.addEventListener("pointermove", function (ev) {
     view = {x0: dragging.v.x0 - dx, x1: dragging.v.x1 - dx,
             y0: dragging.v.y0 + dy, y1: dragging.v.y1 + dy};
     clampView();
-    /* Derive the shift from the CLAMPED view rather than the raw pointer delta.
-       Clamping the view alone still let the cloud slide past the floor, because the
-       translate was computed from where the mouse went, not where the chart allowed. */
+    /* Derive the shift from the CLAMPED view rather than the raw pointer delta, on both
+       axes now that both are clamped. Clamping the view alone still let the cloud slide
+       past the edge, because the translate was computed from where the mouse went, not
+       where the chart allowed. */
+    const appliedX = (dragging.v.x0 - view.x0) / (dragging.v.x1 - dragging.v.x0)
+                     * (SC.W - SC.L - SC.R);
     const appliedY = (dragging.v.y0 - view.y0) / (dragging.v.y1 - dragging.v.y0)
                      * (SC.H - SC.T - SC.B);
     // A pan is a pure translation, so shifting the group is exact AND costs one
     // attribute write instead of repositioning every circle. Axes redraw on the frame;
     // the cloud snaps back to real coordinates when the drag ends.
-    if (ptsG) ptsG.setAttribute("transform",
-      "translate(" + (u.x - dragging.u.x).toFixed(1) + ","
-      + (-appliedY).toFixed(1) + ")");
+    if (dotsG) dotsG.setAttribute("transform",
+      "translate(" + appliedX.toFixed(1) + "," + (-appliedY).toFixed(1) + ")");
     furnitureSoon();
     tipScatter.hide();
     return;
@@ -818,7 +1001,7 @@ svgScatter.addEventListener("pointerleave", function () { tipScatter.hide(); });
 pinchZoom(svgScatter, SC, zoomScatter, function () {
   dragging = null;
   svgScatter.classList.remove("drag");
-  if (ptsG) ptsG.setAttribute("transform", "");
+  if (dotsG) dotsG.setAttribute("transform", "");
   if (gridG) gridG.setAttribute("transform", "");
 });
 svgScatter.addEventListener("dblclick", function () {
@@ -832,18 +1015,22 @@ function state() { return ST; }
 
 
 draw();
+heroFit();
 heroLabels();
 
 /* --------------------------------- the second opinion: Wikipedia pageviews */
 const svgWiki = document.getElementById("wiki");
 const tipWiki = svgWiki ? tipper("tip5", svgWiki) : null;
-const WK = {W: 960, H: 420, L: 66, R: 26, T: 30, B: 52};
+const WK = {W: 960, H: 420, L: 66, R: 26, T: 30, B: 52,
+            wide:   {H: 420, L: 66, R: 26, T: 30, B: 52},
+            narrow: {H: 380, L: 56, R: 12, T: 24, B: 46}};
 let wHome = null, wView = null;
 function wiki() {
   const w = D.wiki;
   if (!w || !svgWiki) return;
   clear(svgWiki);
   tipWiki.reset();
+  fitBox(svgWiki, WK);
   const pts = w.points;
   if (!wHome) {
     wHome = {x0: Math.log10(60), x1: Math.log10(3200),
@@ -854,13 +1041,14 @@ function wiki() {
   const x0 = wView.x0, x1 = wView.x1, y0 = wView.y0, y1 = wView.y1;
   const px = v => WK.L + (v - x0) / (x1 - x0) * (WK.W - WK.L - WK.R);
   const py = v => WK.H - WK.B - (v - y0) / (y1 - y0) * (WK.H - WK.T - WK.B);
+  const okWX = spacer(42);
   ticks(x0, x1).forEach(function (v) {
     const l = Math.log10(v);
     if (l < x0 || l > x1) return;
     svgWiki.appendChild(el("line", {class: "g", x1: px(l), y1: WK.T, x2: px(l),
       y2: WK.H - WK.B}));
-    svgWiki.appendChild(txt(fmt(v), {class: "ax", x: px(l), y: WK.H - WK.B + 18,
-      "text-anchor": "middle"}));
+    if (okWX(px(l))) svgWiki.appendChild(txt(fmt(v), {class: "ax", x: px(l),
+      y: WK.H - WK.B + 18, "text-anchor": "middle"}));
   });
   ticks(y0, y1).forEach(function (v) {
     const l = Math.log10(v);
@@ -876,8 +1064,10 @@ function wiki() {
     const X = px(lx), Y = py(ly);
     svgWiki.appendChild(el("circle", {class: "pt", cx: X.toFixed(1), cy: Y.toFixed(1),
       r: 3.4, opacity: 0.6}));
-    tipWiki.add(X, Y, p.t, fmt(p.a) + " yrs old" + DOT + fmt(p.w)
-      + " Wikipedia views a year" + DOT + fmt(p.d) + " Gutenberg readers a month");
+    tipWiki.add(X, Y, p.t, function () {
+      return fmt(p.a) + " yrs old" + DOT + fmt(p.w) + " Wikipedia views a year"
+        + DOT + fmt(p.d) + " Gutenberg readers a month";
+    });
   });
   drawFit(svgWiki, fitLine(pts.map(function (q) {
     return [Math.log10(q.a), Math.log10(q.w)];
@@ -904,6 +1094,10 @@ function wiki() {
 }
 if (svgWiki) {
   let wDrag = null;
+  /* This plot may zoom out to three times the home span for air round the cloud, so a
+     clamp to the home extent alone would fight the zoom. clampTo covers both: past the
+     home extent the rule flips to keeping the data inside the view. */
+  const clampWiki = function () { clampTo(wView, wHome); };
   const zoomWiki = function (u, k) {
     const fx = (u.x - WK.L) / (WK.W - WK.L - WK.R);
     const fy = (WK.H - WK.B - u.y) / (WK.H - WK.T - WK.B);
@@ -916,6 +1110,7 @@ if (svgWiki) {
     const hh = Math.min(mh, Math.max(mh / 90, (wView.y1 - wView.y0) * k));
     wView = {x0: ax - fx * ww, x1: ax + (1 - fx) * ww,
              y0: ay - fy * hh, y1: ay + (1 - fy) * hh};
+    clampWiki();
     wiki();
   };
   svgWiki.addEventListener("wheel", function (ev) {
@@ -939,6 +1134,7 @@ if (svgWiki) {
       const dy = (u.y - wDrag.u.y) / (WK.H - WK.T - WK.B) * (wDrag.v.y1 - wDrag.v.y0);
       wView = {x0: wDrag.v.x0 - dx, x1: wDrag.v.x1 - dx,
                y0: wDrag.v.y0 + dy, y1: wDrag.v.y1 + dy};
+      clampWiki();
       tipWiki.hide();
       wiki();
       return;
@@ -963,6 +1159,20 @@ function draw() {
   scatter();
 }
 draw();
+
+/* Now that the geometry comes from the container, a resize has to redraw it or a
+   rotated phone keeps the portrait margins. Debounced: a rotation fires a burst and
+   each scatter redraw places ten thousand points. Width only - a mobile browser
+   changes the reported HEIGHT every time its address bar hides, and redrawing on
+   that would rebuild the cloud on every scroll. */
+let lastW = window.innerWidth;
+let resizeT = null;
+window.addEventListener("resize", function () {
+  if (window.innerWidth === lastW) return;
+  lastW = window.innerWidth;
+  clearTimeout(resizeT);
+  resizeT = setTimeout(function () { draw(); wiki(); heroFit(); }, 150);
+});
 
 /* the dropdown filters above the dot plot */
 (function () {

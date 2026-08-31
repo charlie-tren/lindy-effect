@@ -400,8 +400,11 @@ svgShelf.addEventListener("pointerleave", function () { tipShelf.hide(); });
 
 
 //: Both dot plots pan and zoom, and neither said so. Kept on the status line the
-//: charts already write to rather than added as a caption under them.
-const GESTURES = "drag to pan, scroll to zoom, double-click to reset";
+//: charts already write to rather than added as a caption under them. A phone has
+//: no wheel and no double-click, so it is told about the gestures it actually has.
+const GESTURES = window.matchMedia("(pointer: coarse)").matches
+  ? "drag to pan, pinch to zoom"
+  : "drag to pan, scroll to zoom, double-click to reset";
 
 /* --------------------------------------------- scatter: zoom, pan and hover */
 const SC = {W: 960, H: 470, L: 58, R: 122, T: 26, B: 52,
