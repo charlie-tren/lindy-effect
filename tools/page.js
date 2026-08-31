@@ -399,6 +399,10 @@ svgShelf.addEventListener("pointerleave", function () { tipShelf.hide(); });
 
 
 
+//: Both dot plots pan and zoom, and neither said so. Kept on the status line the
+//: charts already write to rather than added as a caption under them.
+const GESTURES = "drag to pan, scroll to zoom, double-click to reset";
+
 /* --------------------------------------------- scatter: zoom, pan and hover */
 const SC = {W: 960, H: 470, L: 58, R: 122, T: 26, B: 52,
             wide:   {H: 470, L: 58, R: 122, T: 26, B: 52},
@@ -607,7 +611,7 @@ function scatter() {
   const z = (HOME.x1 - HOME.x0) / (view.x1 - view.x0);
   const fc = document.getElementById("fcount");
   if (fc) fc.textContent = fmt(shown) + " of " + fmt(D.scatter.meta.of) + " shown"
-    + (z > 1.05 ? DOT + "zoomed " + z.toFixed(1) + "x" : "");
+    + (z > 1.05 ? DOT + "zoomed " + z.toFixed(1) + "x" : "") + DOT + GESTURES;
   const note = document.getElementById("scatnote");
   if (note) note.textContent =
     "The " + fmt(D.scatter.meta.kept) + " most-read works of " + fmt(D.scatter.meta.of)
@@ -762,7 +766,8 @@ function wiki() {
   svgWiki.appendChild(txt("PAGE VIEWS A YEAR", {class: "axl", x: 14,
     y: wmid, "text-anchor": "middle", transform: "rotate(-90 14 " + wmid + ")"}));
   const wn = document.getElementById("wnote");
-  if (wn) wn.textContent = fmt(w.n) + " books that have their own Wikipedia article.";
+  if (wn) wn.textContent = fmt(w.n) + " books that have their own Wikipedia article."
+    + DOT + GESTURES;
   const set = function (id, v) {
     const n = document.getElementById(id);
     if (n) n.textContent = v;

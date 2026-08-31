@@ -140,7 +140,11 @@ a.back:hover .arw{transform:translateX(-4px)}
   margin-left:auto;align-self:flex-end;padding-bottom:.4rem}
 .zoomhint{font:400 .78rem/1.5 var(--mono);color:var(--faint)}
 figure svg{user-select:none;-webkit-user-select:none}
-#scatter,#wiki{cursor:crosshair;touch-action:none}
+/* grab, not crosshair. Both plots have panned and zoomed since they were built,
+   but a crosshair says hover-to-inspect, so on 31/08/2026 Charlie asked to be
+   able to move around them - the capability was there and its affordance pointed
+   the other way. The status line under each carries the gestures in words. */
+#scatter,#wiki{cursor:grab;touch-action:none}
 #scatter.drag,#wiki.drag{cursor:grabbing}
 footer{margin-top:3rem;padding-top:1.15rem;border-top:1px solid var(--rule);
        font-size:.88rem;color:var(--dim)}
@@ -264,14 +268,14 @@ that survivors keep surviving can be checked. Here are %%WORKS%% books, by age.<
 
 <details class="method">
   <summary>What this cannot show</summary>
-  <p><b>Dates are the author's, not the work's</b> - capped at birth plus fifty, because
-  Gutenberg publishes no publication date.</p>
-  <p><b>The count has an undocumented floor</b>: %%BASELINE%%% of the corpus sits between
-  300 and 600 a month, too uniform to be readers.</p>
-  <p><b>Public domain only</b>, so nothing after 1929, %%ENSHARE%%% English, and editions
-  of one work count separately.</p>
-  <p>Gutenberg's RDF feed and catalogue CSV, computed at build time, Spearman with tie
-  correction. Source on
+  <p>Gutenberg publishes no date of publication, so a work is dated by its author's
+  lifetime, capped at birth plus fifty.</p>
+  <p>The download counts have a floor. %%BASELINE%%% of the corpus reports between 300
+  and 600 a month, which is too uniform to be readers.</p>
+  <p>Everything here is public domain, so it stops at 1929. %%ENSHARE%%% is in English,
+  and separate editions of one work are counted separately.</p>
+  <p>Built at each run from Gutenberg's RDF feed and catalogue CSV. Correlations are
+  Spearman with tie correction. Source on
   <a href="https://github.com/charlie-tren/lindy-effect">GitHub</a>.</p>
 </details>
 
