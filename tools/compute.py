@@ -340,13 +340,26 @@ def main():
         "rho_1000": by_floor[1000]["rho"] if 1000 in by_floor else "",
         "baseline_share": out["corpus"]["baseline_share"],
     }
-    new = not hist.exists()
-    with open(hist, "a", newline="", encoding="utf-8") as f:
+    # One row per date, replaced rather than appended. A blind append had already put
+    # 18 identical copies of one day in here, because every local run of this file added
+    # another - and a series that repeats a snapshot 18 times is worse than no series,
+    # since the repetition looks like data. It also means a re-run, whether a backup
+    # cron or someone testing, costs nothing and corrects rather than duplicates.
+    prior = []
+    if hist.exists():
+        with open(hist, newline="", encoding="utf-8") as f:
+            prior = [r for r in csv.DictReader(f) if r["date"] != row["date"]]
+    with open(hist, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=cols)
-        if new:
-            w.writeheader()
+        w.writeheader()
+        for r in sorted(prior, key=lambda r: r["date"]):
+            w.writerow({c: r.get(c, "") for c in cols})
         w.writerow(row)
-    print(f"appended to {hist.relative_to(ROOT)}: {row}\n")
+    with open(hist, newline="", encoding="utf-8") as f:
+        dates = [r["date"] for r in csv.DictReader(f)]
+    assert len(dates) == len(set(dates)), f"history.csv has repeated dates: {dates}"
+    assert dates == sorted(dates), "history.csv is out of date order"
+    print(f"history.csv: {len(dates)} dates, latest {row}\n")
 
     print(f"wrote {dest.relative_to(ROOT)}  {dest.stat().st_size / 1e6:.2f}MB")
     print(f"corpus {out['corpus']['works']:,} works, "

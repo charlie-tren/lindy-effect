@@ -1,12 +1,19 @@
 name: Weekly refresh
 
-# Odd minute on purpose: GitHub's scheduler runs late and drops on-the-hour jobs.
+# Odd minutes on purpose: GitHub's scheduler runs late and drops on-the-hour jobs.
 # Weekly rather than daily because the download figure is a rolling 30-day window, so
-# day-to-day movement is noise - and each run appends to data/history.csv, which is what
-# eventually makes the seasonality visible.
+# day-to-day movement is noise - and each run writes a row into data/history.csv, which
+# is what eventually makes the seasonality visible.
+#
+# Two crons, both on the same UTC Monday, because a bare weekly cron loses a whole week
+# every time GitHub drops a run - and it does: of the first four scheduled runs, two
+# failed. The second is a backup, not a second refresh. It costs a few seconds when the
+# primary worked, because the first step below exits the job as soon as it sees today's
+# row already in history.csv, before the 126MB corpus download.
 on:
   schedule:
     - cron: "23 20 * * 1"
+    - cron: "47 22 * * 1"
   workflow_dispatch:
 
 jobs:
@@ -17,33 +24,59 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Both crons land on the same UTC day, which is what makes this comparison work.
+      # A manual dispatch always proceeds: if someone pressed the button they want the
+      # run, even if today already has a row - compute.py replaces it rather than
+      # appending a second one.
+      - name: Skip if today already refreshed
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run=yes" >> "$GITHUB_OUTPUT"
+            echo "Manual dispatch - running."
+          elif tail -n +2 data/history.csv | cut -d, -f1 | grep -qx "$(date -u +%F)"; then
+            echo "run=no" >> "$GITHUB_OUTPUT"
+            echo "history.csv already has $(date -u +%F) - the primary run worked."
+          else
+            echo "run=yes" >> "$GITHUB_OUTPUT"
+            echo "No row for $(date -u +%F) yet - refreshing."
+          fi
+
       - uses: actions/setup-python@v6
+        if: steps.gate.outputs.run == 'yes'
         with:
           python-version: "3.12"
 
       - name: Install
+        if: steps.gate.outputs.run == 'yes'
         run: |
           pip install --quiet playwright
           playwright install --with-deps chromium
 
       - name: Fetch the corpus
+        if: steps.gate.outputs.run == 'yes'
         run: python tools/fetch.py
 
       - name: Compute
+        if: steps.gate.outputs.run == 'yes'
         run: python tools/compute.py
 
       - name: Build
+        if: steps.gate.outputs.run == 'yes'
         run: python tools/build.py
 
       - name: Render the share card
+        if: steps.gate.outputs.run == 'yes'
         run: python tools/og.py
 
       # The suite is the gate, not a formality: it has caught an inverted axis and a
       # chart with the oldest work missing. A failing run must not publish.
       - name: Test
+        if: steps.gate.outputs.run == 'yes'
         run: python tests/smoke.py
 
       - name: Commit if anything moved
+        if: steps.gate.outputs.run == 'yes'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

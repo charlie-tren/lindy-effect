@@ -40,7 +40,7 @@ problem.
 ```
 tools/fetch.py       RDF feed + catalogue CSV -> data/corpus.csv
 tools/analyse.py     the experiment, printed to stdout - run it and read it
-tools/compute.py     corpus.csv -> data/derived.json (+ appends data/history.csv)
+tools/compute.py     corpus.csv -> data/derived.json (+ one dated row in data/history.csv)
 tools/wiki.py        Wikipedia pageviews for matchable works -> data/wiki.json
 tools/build.py       derived.json + template.html + page.js -> docs/index.html
 tools/og.py          the 1200x630 share card
