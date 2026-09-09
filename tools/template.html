@@ -109,7 +109,11 @@ details p b{color:var(--ink)}
 .method{margin-top:3.3rem}
 .method>p{margin-top:.7rem;font-size:.92rem;color:var(--dim);max-width:70ch}
 .method>p b{color:var(--ink);font-weight:400}
-a.back{text-decoration:none;display:inline-flex;align-items:center;gap:.4rem}
+/* Slightly smaller than body copy. At 17px it sat level with the 36px wordmark
+   and read as a second title rather than as the way out. The toggle beside it is
+   11px, so this splits the difference and stays a link rather than a control. */
+a.back{text-decoration:none;display:inline-flex;align-items:center;gap:.4rem;
+       font-size:.85rem}
 a.back .arw{display:inline-block;transition:transform .25s}
 a.back:hover .arw{transform:translateX(-4px)}
 .shelfwrap{position:relative}
