@@ -23,7 +23,7 @@ const togl = document.getElementById("togl");
 function setTheme(dark) {
   document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
   togl.textContent = dark ? "Light" : "Dark";
-  tog.setAttribute("aria-label", "Switch to the " + (dark ? "light" : "dark") + " theme");
+  tog.setAttribute("aria-label", "Switch to " + (dark ? "light" : "dark") + " theme");
   try { localStorage.setItem("lc-theme", dark ? "dark" : "light"); } catch (e) {}
 }
 tog.addEventListener("click", () =>

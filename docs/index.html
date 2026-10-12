@@ -11,6 +11,9 @@
 <meta property="og:url" content="https://charlietrenorden.com/lindy-effect/">
 <meta property="og:description" content="Every book on Project Gutenberg plotted by age against how much it is read this month. The classic Lindy curve says old ideas endure. 63,026 works say age predicts almost nothing - and the reason is worth seeing.">
 <meta property="og:image" content="https://charlietrenorden.com/lindy-effect/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Lindy Effect">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon-192.png" type="image/png" sizes="192x192">
@@ -44,19 +47,13 @@ body{margin:0;background:var(--ground);color:var(--ink);
 a{color:var(--gilt);text-underline-offset:3px}
 :focus-visible{outline:2px solid var(--gilt);outline-offset:3px}
 
-.tog{appearance:none;cursor:pointer;background:transparent;color:var(--dim);
-  border:1px solid var(--rule);border-radius:999px;padding:.36rem .7rem;
-  font:400 11px/1 var(--disp);letter-spacing:.1em;text-transform:uppercase;
+.theme-toggle{appearance:none;cursor:pointer;background:transparent;color:var(--dim);
+  border:1px solid var(--rule);border-radius:999px;padding:.42rem .82rem;
+  font:500 12.5px/1 var(--body);letter-spacing:.02em;
   display:inline-flex;align-items:center;gap:.45rem;transition:color .2s,border-color .2s}
-.tog:hover{color:var(--ink);border-color:var(--gilt)}
-.tog .dot{width:7px;height:7px;border-radius:50%;background:var(--gilt)}
-.mastr{display:inline-flex;align-items:center;gap:1.15rem;justify-content:flex-end}
-/* Theme toggle first, back-link last, which is the order Beyond Small Talk,
-   Split the Room, Spectrum, Ghostwriters and Equity Research all use. Left in
-   source order the link sat 107px short of the right edge on a phone, so it
-   read as right-ish rather than as the same control in the same place. Only
-   two children here, so one explicit order and one default is unambiguous. */
-.mastr .back{order:2}
+.theme-toggle:hover{color:var(--ink);border-color:var(--gilt)}
+.theme-toggle .dot{width:8px;height:8px;border-radius:50%;background:var(--gilt)}
+.mastr{display:inline-flex;align-items:center;gap:1rem;justify-content:flex-end}
 /* The masthead is space-between, which puts this group right while it shares a
    line with the wordmark. On a phone it wraps to a line of its own and reverts
    to the left, on the opposite side from the rest of the estate. A wrapped
@@ -168,7 +165,6 @@ footer{margin-top:3rem;padding-top:1.15rem;border-top:1px solid var(--rule);
 .pt{fill:var(--gilt)}
 .pt.lo{fill:var(--faint)}
 .hi{fill:var(--ox)}
-.lbl{font:400 10px var(--body);fill:var(--ink)}
 .rg{stroke:var(--gilt);stroke-width:1.1;fill:var(--gilt);fill-opacity:.16}
 .cl{font:700 10px var(--disp);letter-spacing:.11em;fill:var(--ink)}
 .nn{font:400 8.5px var(--mono);fill:var(--faint)}
@@ -196,10 +192,9 @@ footer{margin-top:3rem;padding-top:1.15rem;border-top:1px solid var(--rule);
 <header class="mast">
   <span class="wm">The Lindy Effect</span>
   <span class="mastr">
+    <button class="theme-toggle" id="tog" type="button" aria-label="Switch to light theme"><span class="dot" aria-hidden="true"></span><span class="lbl" id="togl">Light</span></button>
     <a class="back" href="https://charlietrenorden.com/"><span class="arw">&#8592;</span>
       Other projects</a>
-    <button class="tog" id="tog" type="button" aria-label="Switch to the light theme">
-      <span class="dot"></span><span id="togl">Light</span></button>
   </span>
 </header>
 
@@ -336,7 +331,7 @@ const togl = document.getElementById("togl");
 function setTheme(dark) {
   document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
   togl.textContent = dark ? "Light" : "Dark";
-  tog.setAttribute("aria-label", "Switch to the " + (dark ? "light" : "dark") + " theme");
+  tog.setAttribute("aria-label", "Switch to " + (dark ? "light" : "dark") + " theme");
   try { localStorage.setItem("lc-theme", dark ? "dark" : "light"); } catch (e) {}
 }
 tog.addEventListener("click", () =>
