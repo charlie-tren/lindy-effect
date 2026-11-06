@@ -19,6 +19,9 @@
 <link rel="icon" href="favicon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
+/* Subset to the letters of the wordmark only. */
+@font-face{font-family:"EB Garamond";src:url("ebgaramond-500-le.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:"EB Garamond";src:url("ebgaramond-500i-le.woff2") format("woff2");font-weight:500;font-style:italic;font-display:swap}
 :root{
   --ground:#EFE8DA; --panel:#E6DDCA; --ink:#2A2723; --dim:#6C6459; --faint:#9A8F7C;
   --rule:#C3B79E; --gilt:#7A5A22; --ox:#A8452F;
@@ -61,8 +64,8 @@ a{color:var(--gilt);text-underline-offset:3px}
 @media (max-width:640px){ .mast{flex-wrap:wrap} .mastr{width:100%} }
 .mast{display:flex;align-items:baseline;justify-content:space-between;gap:1.15rem;
       flex-wrap:wrap;border-bottom:1px solid var(--rule);padding-bottom:.8rem}
-.wm{font:400 clamp(26px,5vw,36px)/1 var(--body);font-variant:small-caps;
-    letter-spacing:.075em}
+.wm{font:500 clamp(28px,5.4vw,40px)/1 "EB Garamond",Georgia,serif}
+.wm i{color:var(--gilt)}
 nav{display:flex;gap:1.1rem}
 nav button{background:none;border:0;padding:.25rem 0 .3rem;cursor:pointer;color:var(--dim);
   font:400 10.5px/1 var(--body);letter-spacing:.14em;text-transform:uppercase;
@@ -190,7 +193,7 @@ footer{margin-top:3rem;padding-top:1.15rem;border-top:1px solid var(--rule);
 <div class="wrap">
 
 <header class="mast">
-  <span class="wm">The Lindy Effect</span>
+  <span class="wm">The <i>Lindy</i> Effect</span>
   <span class="mastr">
     <button class="theme-toggle" id="tog" type="button" aria-label="Switch to light theme"><span class="dot" aria-hidden="true"></span><span class="lbl" id="togl">Light</span></button>
     <a class="back" href="https://charlietrenorden.com/"><span class="arw">&#8592;</span>
