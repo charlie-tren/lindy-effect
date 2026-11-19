@@ -27,14 +27,16 @@ import io
 import re
 import sys
 import tarfile
+import urllib.error
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 CACHE = ROOT / ".cache"
-CATALOG = "https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv"
-FEED = "https://www.gutenberg.org/cache/epub/feeds/rdf-files.tar.bz2"
+HOSTS = ("https://www.gutenberg.org", "https://gutenberg.pglaf.org")
+CATALOG = "/cache/epub/feeds/pg_catalog.csv"
+FEED = "/cache/epub/feeds/rdf-files.tar.bz2"
 UA = {"User-Agent": "lindy-curve/1.0 (+https://charlietrenorden.com)"}
 
 ID = re.compile(r"pg(\d+)\.rdf$")
@@ -98,8 +100,7 @@ LOC_GROUPS = [("P", "lit"), ("B", "phil"), ("Q", "sci"), ("D", "hist"),
 
 def subjects():
     """id -> coarse subject group, from Gutenberg's catalogue CSV."""
-    req = urllib.request.Request(CATALOG, headers=UA)
-    raw = urllib.request.urlopen(req, timeout=180).read().decode("utf-8-sig", "replace")
+    raw = open_first(CATALOG, 180).read().decode("utf-8-sig", "replace")
     out = {}
     for row in csv.DictReader(io.StringIO(raw)):
         code = (row.get("LoCC") or "").strip()
@@ -116,10 +117,21 @@ def subjects():
     return out
 
 
+def open_first(path, timeout):
+    """gutenberg.org returned 503 for two days from 17/11/2026; pglaf mirrors it."""
+    for i, host in enumerate(HOSTS):
+        try:
+            return urllib.request.urlopen(urllib.request.Request(host + path, headers=UA),
+                                          timeout=timeout)
+        except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+            if i == len(HOSTS) - 1 or getattr(exc, "code", 500) < 500:
+                raise
+            print(f"  {host}: {exc}; trying {HOSTS[i + 1]}")
+
+
 def download(dest):
     dest.parent.mkdir(exist_ok=True)
-    req = urllib.request.Request(FEED, headers=UA)
-    with urllib.request.urlopen(req, timeout=600) as r, open(dest, "wb") as f:
+    with open_first(FEED, 600) as r, open(dest, "wb") as f:
         total = int(r.headers.get("Content-Length") or 0)
         got = 0
         while chunk := r.read(1 << 20):
