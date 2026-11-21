@@ -61,7 +61,7 @@ a{color:var(--gilt);text-underline-offset:3px}
    line with the wordmark. On a phone it wraps to a line of its own and reverts
    to the left, on the opposite side from the rest of the estate. A wrapped
    element needs a new alignment, not the old one. */
-@media (max-width:640px){ .mast{flex-wrap:wrap} .mastr{width:100%} }
+@media (max-width:640px){ .mastr{gap:.75rem} a.back{font-size:0;gap:0} a.back .arw{font-size:1rem} }
 .mast{display:flex;align-items:baseline;justify-content:space-between;gap:1.15rem;
       flex-wrap:wrap;border-bottom:1px solid var(--rule);padding-bottom:.8rem}
 .wm{font:500 clamp(28px,5.4vw,40px)/1 "EB Garamond",Georgia,serif}
@@ -183,6 +183,12 @@ footer{margin-top:3rem;padding-top:1.15rem;border-top:1px solid var(--rule);
 @media (prefers-reduced-motion:no-preference){
   .cv{stroke-dasharray:2400;stroke-dashoffset:2400;animation:draw 1.6s ease-out forwards}
   @keyframes draw{to{stroke-dashoffset:0}}
+}
+/* Phones: 16px stops iOS zooming into a field; the back link gets a finger-sized hit area. */
+@media (pointer: coarse) {
+  input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea { font-size: 16px !important; }
+  a.back { position: relative; }
+  a.back::after { content: ""; position: absolute; inset: -14px -10px; }
 }
 </style>
 <!-- Cloudflare Web Analytics - same estate-wide token as the hub root. See index.html. -->
