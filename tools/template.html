@@ -61,7 +61,7 @@ a{color:var(--gilt);text-underline-offset:3px}
    line with the wordmark. On a phone it wraps to a line of its own and reverts
    to the left, on the opposite side from the rest of the estate. A wrapped
    element needs a new alignment, not the old one. */
-@media (max-width:640px){ .mastr{gap:.75rem} a.back{font-size:0;gap:0} a.back .arw{font-size:1rem} }
+@media (max-width:640px){ .mastr{gap:.75rem} a.back{font-size:0;gap:0} a.back .arw{font-size:calc(1rem + 1.5px)} }
 .mast{display:flex;align-items:baseline;justify-content:space-between;gap:1.15rem;
       flex-wrap:wrap;border-bottom:1px solid var(--rule);padding-bottom:.8rem}
 .wm{font:500 clamp(28px,5.4vw,40px)/1 "EB Garamond",Georgia,serif}
@@ -114,7 +114,7 @@ details p b{color:var(--ink)}
    11px, so this splits the difference and stays a link rather than a control. */
 a.back{text-decoration:none;display:inline-flex;align-items:center;gap:.4rem;
        font-size:.85rem}
-a.back .arw{display:inline-block;transition:transform .25s}
+a.back .arw{display:inline-block;transition:transform .25s;font-size:calc(1em + 1.5px);position:relative;top:-1.5px}
 a.back:hover .arw{transform:translateX(-4px)}
 .shelfwrap{position:relative}
 #scatwrap,#wikiwrap,#herowrap,.shelfwrap{position:relative}
